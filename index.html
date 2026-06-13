@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EUR/USD Strategy Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c0f;
+    --surface: #111318;
+    --surface2: #181c23;
+    --border: #1e2330;
+    --border2: #252c3a;
+    --text: #e8eaf0;
+    --muted: #6b7490;
+    --muted2: #4a5068;
+    --win: #00c97a;
+    --win-bg: #00c97a14;
+    --loss: #ff4560;
+    --loss-bg: #ff456014;
+    --hit: #f0a500;
+    --hit-bg: #f0a50014;
+    --accent: #4d7cfe;
+    --accent-bg: #4d7cfe14;
+    --ref: #a78bfa;
+    --ref-bg: #a78bfa14;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; overflow-x: hidden; }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 32px; height: 32px; background: linear-gradient(135deg, #4d7cfe, #a78bfa); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .logo-text { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; letter-spacing: 0.5px; }
+  .logo-sub { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted2); transition: background 0.3s; }
+  .status-dot.active { background: var(--win); box-shadow: 0 0 8px var(--win); }
+  .status-dot.waiting { background: var(--hit); box-shadow: 0 0 8px var(--hit); }
+  .status-label { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+  .sync-badge { font-size: 10px; font-family: 'JetBrains Mono', monospace; padding: 2px 8px; border-radius: 4px; background: var(--win-bg); color: var(--win); border: 1px solid var(--win); display: none; }
+  .sync-badge.show { display: inline-flex; align-items: center; gap: 4px; }
+
+  .main { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+
+  .chart-section { grid-column: 1; grid-row: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace; }
+  .pair-badge { background: var(--accent-bg); color: var(--accent); font-size: 11px; font-family: 'JetBrains Mono', monospace; font-weight: 700; padding: 3px 8px; border-radius: 4px; border: 1px solid var(--accent); }
+  #tradingview-widget { height: 420px; }
+
+  .sidebar { grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .card-title { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-family: 'JetBrains Mono', monospace; }
+  .card-body { padding: 16px; }
+
+  .session-clock { text-align: center; padding: 12px 0 8px; }
+  .clock-time { font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 700; letter-spacing: 2px; color: var(--text); line-height: 1; }
+  .clock-label { font-size: 10px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+  .session-progress { margin: 12px 0; }
+  .progress-label { display: flex; justify-content: space-between; font-size: 10px; color: var(--muted); margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
+  .progress-bar { height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--ref)); border-radius: 2px; transition: width 1s linear; }
+
+  .candles-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 8px; }
+  .candle-slot { border-radius: 8px; padding: 10px 6px; text-align: center; border: 1px solid var(--border2); background: var(--surface2); transition: all 0.3s; }
+  .candle-slot.ref { border-color: var(--ref); background: var(--ref-bg); }
+  .candle-slot.entry { border-color: var(--accent); background: var(--accent-bg); }
+  .candle-slot.gale { border-color: var(--hit); background: var(--hit-bg); }
+  .candle-slot.green { border-color: var(--win); background: var(--win-bg); }
+  .candle-slot.red { border-color: var(--loss); background: var(--loss-bg); }
+  .candle-number { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-family: 'JetBrains Mono', monospace; }
+  .candle-icon { font-size: 20px; line-height: 1; }
+  .candle-label { font-size: 9px; color: var(--muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+  .score-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .score-item { background: var(--surface2); border-radius: 8px; padding: 12px 8px; text-align: center; border: 1px solid var(--border2); }
+  .score-value { font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 700; line-height: 1; }
+  .score-label { font-size: 10px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .score-win .score-value { color: var(--win); }
+  .score-loss .score-value { color: var(--loss); }
+  .score-hit .score-value { color: var(--hit); }
+
+  .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .stat-row:last-child { border-bottom: none; }
+  .stat-label { font-size: 12px; color: var(--muted); }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600; }
+  .stat-value.positive { color: var(--win); }
+  .stat-value.negative { color: var(--loss); }
+  .stat-value.neutral { color: var(--accent); }
+  .winrate-visual { margin-top: 12px; height: 6px; background: var(--border2); border-radius: 3px; overflow: hidden; }
+  .winrate-fill { height: 100%; background: linear-gradient(90deg, var(--win), #00ff9d); border-radius: 3px; transition: width 0.5s ease; }
+
+  .bottom-section { grid-column: 1; grid-row: 2; }
+
+  /* ── HISTORY TABS ── */
+  .history-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 16px; }
+  .history-tab { padding: 10px 16px; font-size: 11px; font-weight: 600; font-family: 'JetBrains Mono', monospace; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; text-transform: uppercase; letter-spacing: 0.8px; transition: color 0.2s, border-color 0.2s; background: none; border-top: none; border-left: none; border-right: none; }
+  .history-tab:hover { color: var(--text); }
+  .history-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── ANALYTICS CARDS ── */
+  .analytics-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: var(--surface2); }
+  .analytic-card { border-radius: 8px; padding: 12px 10px; text-align: center; border: 1px solid var(--border2); background: var(--surface); position: relative; overflow: hidden; }
+  .analytic-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+  .analytic-card.card-win::before { background: var(--win); }
+  .analytic-card.card-g1::before { background: #3bc9db; }
+  .analytic-card.card-g2::before { background: var(--ref); }
+  .analytic-card.card-loss::before { background: var(--loss); }
+  .analytic-pct { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; line-height: 1; }
+  .analytic-card.card-win .analytic-pct { color: var(--win); }
+  .analytic-card.card-g1 .analytic-pct { color: #3bc9db; }
+  .analytic-card.card-g2 .analytic-pct { color: var(--ref); }
+  .analytic-card.card-loss .analytic-pct { color: var(--loss); }
+  .analytic-label { font-size: 10px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .analytic-count { font-size: 10px; color: var(--muted2); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── STACKED BAR ── */
+  .dist-bar-wrap { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .dist-bar-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 6px; font-family: 'JetBrains Mono', monospace; }
+  .dist-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 1px; }
+  .dist-seg { height: 100%; transition: width 0.5s ease; }
+  .dist-seg.seg-win { background: var(--win); }
+  .dist-seg.seg-g1 { background: #3bc9db; }
+  .dist-seg.seg-g2 { background: var(--ref); }
+  .dist-seg.seg-loss { background: var(--loss); }
+  .dist-legend { display: flex; gap: 14px; margin-top: 6px; flex-wrap: wrap; }
+  .dist-legend-item { display: flex; align-items: center; gap: 5px; font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+  .dist-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
+  /* ── PERIOD GROUP TABLE ── */
+  .period-group { margin: 0; }
+  .period-group-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: var(--surface2); border-bottom: 1px solid var(--border); cursor: pointer; user-select: none; }
+  .period-group-header:hover { background: var(--border); }
+  .period-group-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 0.5px; }
+  .period-group-meta { display: flex; gap: 10px; align-items: center; }
+  .period-mini-badge { font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+  .pmb-win { background: var(--win-bg); color: var(--win); }
+  .pmb-loss { background: var(--loss-bg); color: var(--loss); }
+  .period-toggle { color: var(--muted); font-size: 11px; transition: transform 0.2s; }
+  .period-toggle.collapsed { transform: rotate(-90deg); }
+
+  /* ── HISTORY TABLE ── */
+  .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .history-table th { padding: 8px 12px; text-align: left; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; background: var(--surface); position: sticky; top: 0; z-index: 1; }
+  .history-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .history-table tr:hover td { background: var(--surface2); }
+  .history-table tr.row-win td { border-left: 2px solid var(--win); }
+  .history-table tr.row-g1 td { border-left: 2px solid #3bc9db; }
+  .history-table tr.row-g2 td { border-left: 2px solid var(--ref); }
+  .history-table tr.row-loss td { border-left: 2px solid var(--loss); }
+  .history-table tr.row-win td:first-child,
+  .history-table tr.row-g1 td:first-child,
+  .history-table tr.row-g2 td:first-child,
+  .history-table tr.row-loss td:first-child { padding-left: 10px; }
+
+  .badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+  .badge-win { background: var(--win-bg); color: var(--win); border: 1px solid var(--win); }
+  .badge-loss { background: var(--loss-bg); color: var(--loss); border: 1px solid var(--loss); }
+  .badge-g1 { background: rgba(59,201,219,0.12); color: #3bc9db; border: 1px solid #3bc9db; }
+  .badge-g2 { background: var(--ref-bg); color: var(--ref); border: 1px solid var(--ref); }
+
+  .candle-mini { display: flex; gap: 3px; align-items: center; }
+  .dot-green { width: 8px; height: 8px; border-radius: 2px; background: var(--win); }
+  .dot-red { width: 8px; height: 8px; border-radius: 2px; background: var(--loss); }
+
+  .empty-state { text-align: center; padding: 40px 20px; color: var(--muted); }
+  .empty-icon { font-size: 32px; margin-bottom: 8px; }
+  .empty-text { font-size: 13px; }
+
+  .result-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 999; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.3s; }
+  .result-overlay.show { opacity: 1; pointer-events: all; }
+  .result-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 16px; padding: 32px 40px; text-align: center; min-width: 260px; transform: scale(0.9); transition: transform 0.3s; }
+  .result-overlay.show .result-card { transform: scale(1); }
+  .result-emoji { font-size: 56px; margin-bottom: 12px; }
+  .result-title { font-size: 28px; font-weight: 700; font-family: 'JetBrains Mono', monospace; margin-bottom: 4px; }
+  .result-sub { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+  .result-title.win { color: var(--win); }
+  .result-title.loss { color: var(--loss); }
+  .result-close { background: var(--surface2); border: 1px solid var(--border2); color: var(--text); padding: 8px 24px; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: 'JetBrains Mono', monospace; transition: background 0.2s; }
+  .result-close:hover { background: var(--border2); }
+
+  .btn-icon { background: var(--surface2); border: 1px solid var(--border2); color: var(--muted); padding: 4px 8px; border-radius: 6px; cursor: pointer; font-size: 12px; font-family: 'JetBrains Mono', monospace; transition: all 0.2s; display: flex; align-items: center; gap: 4px; }
+  .btn-icon:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-icon.spinning span { display: inline-block; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .clear-btn { background: none; border: 1px solid var(--border2); color: var(--muted); padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 10px; font-family: 'JetBrains Mono', monospace; transition: all 0.2s; }
+  .clear-btn:hover { border-color: var(--loss); color: var(--loss); }
+
+  .next-session { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); text-align: center; padding: 6px; }
+
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .sidebar { grid-column: 1; grid-row: auto; }
+    .chart-section, .bottom-section { grid-column: 1; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">📈</div>
+    <div>
+      <div class="logo-text">EUR/USD Tracker</div>
+      <div class="logo-sub">Estratégia 15M · Horários IQ Option</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="sync-badge" id="syncBadge">☁ Sincronizado</span>
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-label" id="statusLabel">Conectando...</span>
+  </div>
+</header>
+
+<div class="main">
+  <div class="chart-section">
+    <div class="section-header">
+      <span class="section-title">Gráfico ao Vivo</span>
+      <span class="pair-badge">EUR/USD · 15M</span>
+    </div>
+    <div id="tradingview-widget"></div>
+  </div>
+
+  <div class="sidebar">
+    <!-- SESSÃO ATUAL -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Sessão Atual</span>
+        <span class="next-session" id="nextSession">–</span>
+      </div>
+      <div class="card-body">
+        <div class="session-clock">
+          <div class="clock-time" id="clockTime">00:00:00</div>
+          <div class="clock-label">Hora UTC</div>
+        </div>
+        <div class="session-progress">
+          <div class="progress-label">
+            <span id="progressLabel">Vela 1 de 4</span>
+            <span id="progressPct">0%</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        </div>
+        <div class="candles-grid" id="candlesGrid">
+          <div class="candle-slot ref" id="slot0"><div class="candle-number">Vela 1</div><div class="candle-icon">⬜</div><div class="candle-label">Referência</div></div>
+          <div class="candle-slot entry" id="slot1"><div class="candle-number">Vela 2</div><div class="candle-icon">⬜</div><div class="candle-label">Entrada</div></div>
+          <div class="candle-slot gale" id="slot2"><div class="candle-number">Vela 3</div><div class="candle-icon">⬜</div><div class="candle-label">Gale 1</div></div>
+          <div class="candle-slot gale" id="slot3"><div class="candle-number">Vela 4</div><div class="candle-icon">⬜</div><div class="candle-label">Gale 2</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PLACAR -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Placar do Dia</span>
+        <button class="clear-btn" onclick="clearData()">Zerar</button>
+      </div>
+      <div class="card-body">
+        <div class="score-grid">
+          <div class="score-item score-win"><div class="score-value" id="scoreWin">0</div><div class="score-label">Win</div></div>
+          <div class="score-item score-loss"><div class="score-value" id="scoreLoss">0</div><div class="score-label">Loss</div></div>
+          <div class="score-item score-hit"><div class="score-value" id="scoreHit">–</div><div class="score-label">Total</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ESTATÍSTICAS -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">Estatísticas</span></div>
+      <div class="card-body">
+        <div class="stat-row"><span class="stat-label">Taxa de Acerto</span><span class="stat-value neutral" id="statWinrate">–</span></div>
+        <div class="stat-row"><span class="stat-label">Wins (Entrada)</span><span class="stat-value positive" id="statWin1">0</span></div>
+        <div class="stat-row"><span class="stat-label">Wins (Gale 1)</span><span class="stat-value positive" id="statWin2">0</span></div>
+        <div class="stat-row"><span class="stat-label">Wins (Gale 2)</span><span class="stat-value positive" id="statWin3">0</span></div>
+        <div class="stat-row"><span class="stat-label">Sessões Hoje</span><span class="stat-value neutral" id="statTotal">0</span></div>
+        <div class="winrate-visual"><div class="winrate-fill" id="winrateFill" style="width:0%"></div></div>
+        <div class="stat-row" style="margin-top:10px"><span class="stat-label">Wins / 2 meses</span><span class="stat-value neutral" id="statPeriod">–</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="bottom-section">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Histórico de Sessões</span>
+        <button class="btn-icon" id="refreshBtn" onclick="fetchCandles()"><span>↻</span> Atualizar</button>
+      </div>
+      <div class="history-tabs">
+        <button class="history-tab active" id="tab-day" onclick="setHistoryTab('day')">Dia</button>
+        <button class="history-tab" id="tab-week" onclick="setHistoryTab('week')">Semana</button>
+        <button class="history-tab" id="tab-month" onclick="setHistoryTab('month')">Mês</button>
+      </div>
+      <div class="analytics-bar">
+        <div class="analytic-card card-win"><div class="analytic-pct" id="pctWin">–</div><div class="analytic-label">Win Direto</div><div class="analytic-count" id="cntWin">0 sessões</div></div>
+        <div class="analytic-card card-g1"><div class="analytic-pct" id="pctG1">–</div><div class="analytic-label">Gale 1</div><div class="analytic-count" id="cntG1">0 sessões</div></div>
+        <div class="analytic-card card-g2"><div class="analytic-pct" id="pctG2">–</div><div class="analytic-label">Gale 2</div><div class="analytic-count" id="cntG2">0 sessões</div></div>
+        <div class="analytic-card card-loss"><div class="analytic-pct" id="pctLoss">–</div><div class="analytic-label">Loss</div><div class="analytic-count" id="cntLoss">0 sessões</div></div>
+      </div>
+      <div class="dist-bar-wrap">
+        <div class="dist-bar-label">Distribuição dos resultados</div>
+        <div class="dist-bar">
+          <div class="dist-seg seg-win" id="distWin" style="width:0%"></div>
+          <div class="dist-seg seg-g1" id="distG1" style="width:0%"></div>
+          <div class="dist-seg seg-g2" id="distG2" style="width:0%"></div>
+          <div class="dist-seg seg-loss" id="distLoss" style="width:0%"></div>
+        </div>
+        <div class="dist-legend">
+          <span class="dist-legend-item"><span class="dist-dot" style="background:var(--win)"></span>Win direto</span>
+          <span class="dist-legend-item"><span class="dist-dot" style="background:#3bc9db"></span>Gale 1</span>
+          <span class="dist-legend-item"><span class="dist-dot" style="background:var(--ref)"></span>Gale 2</span>
+          <span class="dist-legend-item"><span class="dist-dot" style="background:var(--loss)"></span>Loss</span>
+        </div>
+      </div>
+      <div id="historyContainer">
+        <div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Carregando dados...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- RESULT OVERLAY -->
+<div class="result-overlay" id="resultOverlay">
+  <div class="result-card">
+    <div class="result-emoji" id="resultEmoji"></div>
+    <div class="result-title" id="resultTitle"></div>
+    <div class="result-sub" id="resultSub"></div>
+    <button class="result-close" onclick="closeResult()">Fechar</button>
+  </div>
+</div>
+
+<!-- TRADINGVIEW -->
+<script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+
+<!-- FIREBASE -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, doc, setDoc, getDocs, deleteDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// ==========================================
+// FIREBASE CONFIG
+// ==========================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCLvmH6Zj_xIlddF_YTQkMdiRXZSgsCZH4",
+  authDomain: "daytrade15m-38488.firebaseapp.com",
+  projectId: "daytrade15m-38488",
+  storageBucket: "daytrade15m-38488.firebasestorage.app",
+  messagingSenderId: "1044092199769",
+  appId: "1:1044092199769:web:979a2aedf5f45305c9a248"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const COLLECTION = "eurusd_sessions";
+
+// ==========================================
+// TWELVE DATA CONFIG
+// ==========================================
+const API_KEY = 'c4b0f09590c440e18f195406e67e9361';
+
+// ==========================================
+// STATE
+// ==========================================
+let sessions = [];
+let knownHours = new Set();
+
+// ==========================================
+// FIRESTORE - LOAD & LISTEN
+// ==========================================
+function listenSessions() {
+  const q = query(collection(db, COLLECTION), orderBy("hour", "desc"));
+  onSnapshot(q, (snapshot) => {
+    sessions = snapshot.docs.map(d => d.data());
+    knownHours = new Set(sessions.map(s => s.hour));
+    renderHistory();
+    renderScore();
+    showSyncBadge();
+  });
+}
+
+async function saveSession(session) {
+  try {
+    await setDoc(doc(db, COLLECTION, session.hour.replace(/[\s:]/g, '-')), session);
+  } catch(e) { console.error('Erro ao salvar:', e); }
+}
+
+async function clearData() {
+  if (!confirm('Zerar todos os dados?')) return;
+  const snap = await getDocs(collection(db, COLLECTION));
+  for (const d of snap.docs) await deleteDoc(d.ref);
+  sessions = [];
+  knownHours = new Set();
+  renderHistory();
+  renderScore();
+}
+window.clearData = clearData;
+
+// ==========================================
+// TRADINGVIEW
+// ==========================================
+function initChart() {
+  new TradingView.widget({
+    container_id: 'tradingview-widget',
+    symbol: 'FX:EURUSD',
+    interval: '15',
+    timezone: 'UTC',
+    theme: 'dark',
+    style: '1',
+    locale: 'br',
+    toolbar_bg: '#111318',
+    enable_publishing: false,
+    hide_top_toolbar: false,
+    save_image: false,
+    backgroundColor: '#111318',
+    gridColor: '#1e2330',
+    height: 420,
+    width: '100%',
+  });
+}
+
+// ==========================================
+// CLOCK
+// ==========================================
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getUTCHours()).padStart(2,'0');
+  const m = String(now.getUTCMinutes()).padStart(2,'0');
+  const s = String(now.getUTCSeconds()).padStart(2,'0');
+  document.getElementById('clockTime').textContent = `${h}:${m}:${s}`;
+  const elapsedSeconds = now.getUTCMinutes() * 60 + now.getUTCSeconds();
+  const pct = Math.round((elapsedSeconds / 3600) * 100);
+  const candleNum = Math.floor(now.getUTCMinutes() / 15) + 1;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressPct').textContent = pct + '%';
+  document.getElementById('progressLabel').textContent = `Vela ${candleNum} de 4`;
+  const minsLeft = 59 - now.getUTCMinutes();
+  const secsLeft = 59 - now.getUTCSeconds();
+  document.getElementById('nextSession').textContent = `Próxima: ${String(minsLeft).padStart(2,'0')}:${String(secsLeft).padStart(2,'0')}`;
+}
+
+// ==========================================
+// FETCH CANDLES
+// outputsize=5760 = ~60 dias de velas 15min (24h*4*60)
+// ==========================================
+let historicalLoaded = false;
+
+async function fetchCandles(historical = false) {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  setStatus('waiting', historical ? 'Carregando histórico 2 meses...' : 'Buscando dados...');
+  try {
+    // Para histórico completo usa size maior; para live usa 20 velas
+    const outputsize = historical ? 5760 : 20;
+    const url = `https://api.twelvedata.com/time_series?symbol=EUR/USD&interval=15min&outputsize=${outputsize}&apikey=${API_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.status === 'error') { setStatus('', 'Erro na API'); btn.classList.remove('spinning'); return; }
+    const candles = data.values.reverse();
+    processCandles(candles, historical);
+    setStatus('active', historical ? 'Histórico 2 meses carregado' : 'Atualizado');
+  } catch(e) { setStatus('', 'Erro de conexão'); }
+  btn.classList.remove('spinning');
+}
+window.fetchCandles = () => fetchCandles(false);
+
+// ==========================================
+// MARKET HOURS FILTER — IQ Option EUR/JPY Forex
+// Conforme horários exibidos na plataforma (UTC):
+// Seg: 00:00–23:59 UTC
+// Ter: 00:00–23:59 UTC
+// Qua: 00:00–23:59 UTC
+// Qui: 00:00–23:59 UTC
+// Sex: 00:00–18:00 UTC
+// Sáb: Fechado
+// Dom: 18:01–23:59 UTC
+// ==========================================
+function isMarketOpen(dt) {
+  const day = dt.getUTCDay(); // 0=Dom,1=Seg..5=Sex,6=Sáb
+  const hm = dt.getUTCHours() * 60 + dt.getUTCMinutes();
+
+  if (day === 6) return false; // Sábado: sempre fechado
+
+  if (day === 0) {
+    // Domingo: apenas 18:01–23:59 UTC
+    return hm >= 1081; // 18*60+1 = 1081
+  }
+
+  if (day >= 1 && day <= 4) {
+    // Seg–Qui: 00:00–23:59 UTC (dia inteiro)
+    return true;
+  }
+
+  if (day === 5) {
+    // Sexta: 00:00–18:00 UTC
+    return hm < 1080; // 18*60 = 1080
+  }
+
+  return false;
+}
+
+// ==========================================
+// PROCESS CANDLES
+// historical=true → salva em lote sem popup
+// ==========================================
+function processCandles(candles, historical = false) {
+  const sessions_found = {};
+  candles.forEach(c => {
+    const dt = new Date(c.datetime + 'Z');
+    if (!isMarketOpen(dt)) return;
+    const hourKey = `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')} ${String(dt.getUTCHours()).padStart(2,'0')}:00`;
+    const candleIdx = dt.getUTCMinutes() / 15;
+    if (!sessions_found[hourKey]) sessions_found[hourKey] = [null,null,null,null];
+    sessions_found[hourKey][candleIdx] = c;
+  });
+
+  // Ordena por hora para processar cronologicamente
+  const sortedEntries = Object.entries(sessions_found).sort(([a],[b]) => a.localeCompare(b));
+  const now = new Date();
+  let latestEntry = null;
+
+  sortedEntries.forEach(([hourKey, cs]) => {
+    if (!cs[0]) return;
+    const refColor = parseFloat(cs[0].close) > parseFloat(cs[0].open) ? 'green' : 'red';
+    const allAvailable = cs[1] && cs[2] && cs[3];
+
+    // Atualiza UI apenas para a sessão mais recente (não histórico)
+    if (!historical) {
+      latestEntry = { cs, refColor };
+    }
+
+    if (!allAvailable) return;
+    if (knownHours.has(hourKey)) return;
+
+    const result = evaluateSession(cs, refColor, hourKey);
+    if (result) {
+      saveSession(result);
+      // Mostra popup apenas para sessões ao vivo (não backfill histórico)
+      if (!historical) showResult(result);
+    }
+  });
+
+  // Atualiza slots visuais com a sessão mais recente
+  if (latestEntry) updateCandleSlots(latestEntry.cs, latestEntry.refColor);
+}
+
+function evaluateSession(cs, refColor, hourKey) {
+  const color = c => parseFloat(c.close) > parseFloat(c.open) ? 'green' : 'red';
+  const colors = cs.map(c => c ? color(c) : null);
+  const ref = colors[0];
+  let result = 'loss', winCandle = null;
+  if (colors[1] === ref) { result = 'win'; winCandle = 2; }
+  else if (colors[2] === ref) { result = 'win'; winCandle = 3; }
+  else if (colors[3] === ref) { result = 'win'; winCandle = 4; }
+  return { hour: hourKey, refColor: ref, candles: colors, result, winCandle, timestamp: new Date().toISOString() };
+}
+
+// ==========================================
+// CANDLE SLOTS UI
+// ==========================================
+function updateCandleSlots(cs, refColor) {
+  const labels = ['Referência','Entrada','Gale 1','Gale 2'];
+  const defaultClass = ['ref','entry','gale','gale'];
+  cs.forEach((c, i) => {
+    const el = document.getElementById('slot' + i);
+    el.className = 'candle-slot';
+    if (!c) { el.classList.add(defaultClass[i]); el.querySelector('.candle-icon').textContent = '⬜'; return; }
+    const isGreen = parseFloat(c.close) > parseFloat(c.open);
+    el.classList.add(isGreen ? 'green' : 'red');
+    el.querySelector('.candle-icon').textContent = isGreen ? '🟢' : '🔴';
+  });
+}
+
+// ==========================================
+// RESULT OVERLAY
+// ==========================================
+function showResult(session) {
+  const overlay = document.getElementById('resultOverlay');
+  document.getElementById('resultEmoji').textContent = session.result === 'win' ? '🏆' : '❌';
+  const title = document.getElementById('resultTitle');
+  title.textContent = session.result === 'win' ? 'WIN' : 'LOSS';
+  title.className = 'result-title ' + session.result;
+  const labels = ['','Entrada','Gale 1','Gale 2'];
+  document.getElementById('resultSub').textContent = session.result === 'win'
+    ? `Ganhou na ${labels[session.winCandle]} · ${session.hour}`
+    : `Nenhuma vela fechou na direção · ${session.hour}`;
+  overlay.classList.add('show');
+}
+window.closeResult = () => document.getElementById('resultOverlay').classList.remove('show');
+
+// ==========================================
+// HISTORY TAB STATE
+// ==========================================
+let currentHistoryTab = 'day';
+window.setHistoryTab = function(tab) {
+  currentHistoryTab = tab;
+  ['day','week','month'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+  });
+  renderHistory(0);
+};
+
+// ==========================================
+// RENDER HISTORY — grouped by day/week/month
+// ==========================================
+let historyPage = 0;
+const PAGE_SIZE = 200;
+
+function getWeekKey(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() - day + 1);
+  return d.toISOString().slice(0,10);
+}
+function getMonthKey(dateStr) { return dateStr.slice(0,7); }
+
+function fmtWeekRange(weekStart) {
+  const s = new Date(weekStart + 'T00:00:00Z');
+  const e = new Date(s); e.setUTCDate(e.getUTCDate()+6);
+  const dd = d => String(d.getUTCDate()).padStart(2,'0');
+  const mm = d => String(d.getUTCMonth()+1).padStart(2,'0');
+  return `${dd(s)}/${mm(s)} – ${dd(e)}/${mm(e)}/${e.getUTCFullYear()}`;
+}
+function fmtMonthName(key) {
+  const [y,m] = key.split('-');
+  const names = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  return `${names[parseInt(m)-1]} ${y}`;
+}
+
+function groupSessions(list, tab) {
+  const groups = {};
+  list.forEach(s => {
+    const datePart = s.hour.slice(0,10);
+    const key = tab === 'day' ? datePart : tab === 'week' ? getWeekKey(datePart) : getMonthKey(datePart);
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(s);
+  });
+  return Object.entries(groups).sort(([a],[b]) => b.localeCompare(a));
+}
+
+function calcStats(list) {
+  const total = list.length;
+  const w1 = list.filter(s => s.winCandle === 2).length;
+  const w2 = list.filter(s => s.winCandle === 3).length;
+  const w3 = list.filter(s => s.winCandle === 4).length;
+  const loss = list.filter(s => s.result === 'loss').length;
+  const pct = n => total ? Math.round((n/total)*100) : 0;
+  return { total, w1, w2, w3, loss, pct };
+}
+
+function renderAnalytics(list) {
+  const { total, w1, w2, w3, loss, pct } = calcStats(list);
+  document.getElementById('pctWin').textContent  = total ? pct(w1)+'%'  : '–';
+  document.getElementById('pctG1').textContent   = total ? pct(w2)+'%'  : '–';
+  document.getElementById('pctG2').textContent   = total ? pct(w3)+'%'  : '–';
+  document.getElementById('pctLoss').textContent = total ? pct(loss)+'%': '–';
+  const lbl = n => n === 1 ? '1 sessão' : n+' sessões';
+  document.getElementById('cntWin').textContent  = lbl(w1);
+  document.getElementById('cntG1').textContent   = lbl(w2);
+  document.getElementById('cntG2').textContent   = lbl(w3);
+  document.getElementById('cntLoss').textContent = lbl(loss);
+  // distribution bar
+  document.getElementById('distWin').style.width  = pct(w1)+'%';
+  document.getElementById('distG1').style.width   = pct(w2)+'%';
+  document.getElementById('distG2').style.width   = pct(w3)+'%';
+  document.getElementById('distLoss').style.width = pct(loss)+'%';
+}
+
+function renderHistory(page = 0) {
+  historyPage = page;
+  const container = document.getElementById('historyContainer');
+
+  if (!sessions.length) {
+    renderAnalytics([]);
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">📊</div><div class="empty-text">Nenhuma sessão ainda.<br>O sistema detecta automaticamente a cada hora cheia.</div></div>`;
+    return;
+  }
+
+  // Filter by tab period
+  const now = new Date();
+  let filtered = sessions;
+  if (currentHistoryTab === 'day') {
+    const today = now.toISOString().slice(0,10);
+    filtered = sessions.filter(s => s.hour.startsWith(today));
+  } else if (currentHistoryTab === 'week') {
+    const weekStart = getWeekKey(now.toISOString().slice(0,10));
+    filtered = sessions.filter(s => getWeekKey(s.hour.slice(0,10)) === weekStart);
+  } else {
+    const monthKey = now.toISOString().slice(0,7);
+    filtered = sessions.filter(s => s.hour.startsWith(monthKey));
+  }
+
+  renderAnalytics(filtered);
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Sem sessões neste período.</div></div>`;
+    return;
+  }
+
+  const groups = groupSessions(filtered, currentHistoryTab);
+  const collapsed = new Set();
+
+  function buildHTML() {
+    return groups.map(([key, list]) => {
+      const { total, w1, w2, w3, loss } = calcStats(list);
+      const wins = w1+w2+w3;
+      const winPct = Math.round((wins/total)*100);
+      const label = currentHistoryTab === 'day'
+        ? new Date(key+'T00:00:00Z').toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long',year:'numeric',timeZone:'UTC'})
+        : currentHistoryTab === 'week' ? 'Semana · ' + fmtWeekRange(key)
+        : fmtMonthName(key);
+      const isCollapsed = collapsed.has(key);
+      const rows = list.map(s => {
+        const winCandle = s.winCandle;
+        let badge, rowClass;
+        if (s.result === 'loss') { badge = `<span class="badge badge-loss">✗ LOSS</span>`; rowClass = 'row-loss'; }
+        else if (winCandle === 2) { badge = `<span class="badge badge-win">✓ WIN</span>`; rowClass = 'row-win'; }
+        else if (winCandle === 3) { badge = `<span class="badge badge-g1">↑ G1</span>`; rowClass = 'row-g1'; }
+        else { badge = `<span class="badge badge-g2">↑↑ G2</span>`; rowClass = 'row-g2'; }
+        const dots = s.candles.map((c,i) => `<div class="dot-${c}" style="${i===0?'opacity:0.35':''}"></div>`).join('');
+        const winLabel = winCandle ? ['','Entrada','Gale 1','Gale 2'][winCandle] : '–';
+        const refEmoji = s.refColor === 'green' ? '🟢' : '🔴';
+        const timePart = s.hour.split(' ')[1];
+        return `<tr class="${rowClass}">
+          <td style="color:var(--muted)">${timePart} UTC</td>
+          <td>${refEmoji} ${s.refColor === 'green' ? 'Alta' : 'Baixa'}</td>
+          <td><div class="candle-mini">${dots}</div></td>
+          <td>${badge}</td>
+          <td style="color:var(--muted);font-size:11px">${winLabel}</td>
+        </tr>`;
+      }).join('');
+
+      return `<div class="period-group">
+        <div class="period-group-header" onclick="toggleGroup('${key}')">
+          <span class="period-group-title">${label}</span>
+          <div class="period-group-meta">
+            <span class="period-mini-badge pmb-win">✓ ${wins} (${winPct}%)</span>
+            <span class="period-mini-badge pmb-loss">✗ ${loss}</span>
+            <span style="font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace">${total} sess.</span>
+            <span class="period-toggle ${isCollapsed ? 'collapsed' : ''}" id="toggle-${key}">▼</span>
+          </div>
+        </div>
+        <div id="group-${key}" style="display:${isCollapsed?'none':'block'}">
+          <table class="history-table">
+            <thead><tr><th>Hora UTC</th><th>Ref.</th><th>Velas</th><th>Resultado</th><th>Onde ganhou</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  window.toggleGroup = function(key) {
+    const el = document.getElementById('group-'+key);
+    const tog = document.getElementById('toggle-'+key);
+    if (el.style.display === 'none') {
+      el.style.display = 'block';
+      tog.classList.remove('collapsed');
+      collapsed.delete(key);
+    } else {
+      el.style.display = 'none';
+      tog.classList.add('collapsed');
+      collapsed.add(key);
+    }
+  };
+
+  container.innerHTML = buildHTML();
+}
+window.renderHistory = renderHistory;
+// ==========================================
+// RENDER SCORE
+// ==========================================
+function renderScore() {
+  const today = new Date().toISOString().slice(0,10);
+  const todaySessions = sessions.filter(s => s.hour.startsWith(today));
+  const wins = todaySessions.filter(s => s.result === 'win').length;
+  const losses = todaySessions.filter(s => s.result === 'loss').length;
+  const total = todaySessions.length;
+  document.getElementById('scoreWin').textContent = wins;
+  document.getElementById('scoreLoss').textContent = losses;
+  document.getElementById('scoreHit').textContent = total || '–';
+  document.getElementById('statTotal').textContent = total;
+  document.getElementById('statWin1').textContent = todaySessions.filter(s => s.winCandle === 2).length;
+  document.getElementById('statWin2').textContent = todaySessions.filter(s => s.winCandle === 3).length;
+  document.getElementById('statWin3').textContent = todaySessions.filter(s => s.winCandle === 4).length;
+
+  // Winrate do dia
+  if (total > 0) {
+    const pct = Math.round((wins/total)*100);
+    document.getElementById('statWinrate').textContent = pct + '%';
+    document.getElementById('winrateFill').style.width = pct + '%';
+  } else {
+    document.getElementById('statWinrate').textContent = '–';
+    document.getElementById('winrateFill').style.width = '0%';
+  }
+
+  // Estatísticas dos últimos 2 meses (total)
+  const allWins = sessions.filter(s => s.result === 'win').length;
+  const allTotal = sessions.length;
+  const allPct = allTotal > 0 ? Math.round((allWins/allTotal)*100) : 0;
+  const statPeriodEl = document.getElementById('statPeriod');
+  if (statPeriodEl) {
+    statPeriodEl.textContent = `${allWins}/${allTotal} (${allPct}%)`;
+  }
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
+function setStatus(type, label) {
+  document.getElementById('statusDot').className = 'status-dot ' + type;
+  document.getElementById('statusLabel').textContent = label;
+}
+
+function showSyncBadge() {
+  const badge = document.getElementById('syncBadge');
+  badge.classList.add('show');
+  setTimeout(() => badge.classList.remove('show'), 3000);
+}
+
+// ==========================================
+// AUTO FETCH
+// ==========================================
+function startAutoFetch() {
+  // Primeiro carrega histórico completo de 2 meses
+  fetchCandles(true).then(() => {
+    historicalLoaded = true;
+  });
+
+  // Atualiza ao vivo a cada 5 seg nos momentos certos (1 min após vela fechar)
+  setInterval(() => {
+    const now = new Date();
+    // Dispara 1 min após cada vela de 15min fechar (minutos 1, 16, 31, 46)
+    if ((now.getUTCMinutes() % 15 === 1) && now.getUTCSeconds() < 10) {
+      fetchCandles(false);
+    }
+  }, 5000);
+}
+
+// ==========================================
+// INIT
+// ==========================================
+window.addEventListener('load', () => {
+  initChart();
+  updateClock();
+  setInterval(() => {
+    updateClock();
+    const now = new Date();
+    const status = isMarketOpen(now);
+    if (status) {
+      setStatus('active', 'Mercado aberto');
+    } else {
+      setStatus('', 'Mercado fechado');
+    }
+  }, 1000);
+  listenSessions();
+  startAutoFetch();
+});
+</script>
+</body>
+</html>
