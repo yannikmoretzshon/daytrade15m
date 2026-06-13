@@ -301,7 +301,7 @@
         <button class="history-tab" id="tab-week" onclick="setHistoryTab('week')">Semana</button>
         <button class="history-tab" id="tab-month" onclick="setHistoryTab('month')">Mês</button>
       </div>
-      <div class="analytics-bar">
+      <div class="analytics-bar"><div style="grid-column:1/-1;padding-bottom:4px;font-size:10px;color:var(--muted);font-family:JetBrains Mono,monospace;text-transform:uppercase;letter-spacing:.8px" id="analyticsPeriod"></div>
         <div class="analytic-card card-win"><div class="analytic-pct" id="pctWin">–</div><div class="analytic-label">Win Direto</div><div class="analytic-count" id="cntWin">0 sessões</div></div>
         <div class="analytic-card card-g1"><div class="analytic-pct" id="pctG1">–</div><div class="analytic-label">Gale 1</div><div class="analytic-count" id="cntG1">0 sessões</div></div>
         <div class="analytic-card card-g2"><div class="analytic-pct" id="pctG2">–</div><div class="analytic-label">Gale 2</div><div class="analytic-count" id="cntG2">0 sessões</div></div>
@@ -659,6 +659,10 @@ function calcStats(list) {
 
 function renderAnalytics(list) {
   const { total, w1, w2, w3, loss, pct } = calcStats(list);
+  // Atualiza label do período nos cards
+  const periodLabels = { day: 'Hoje', week: 'Esta semana', month: 'Este mês' };
+  const periodEl = document.getElementById('analyticsPeriod');
+  if (periodEl) periodEl.textContent = (periodLabels[currentHistoryTab] || '') + (total ? ' · ' + total + ' sessões' : '');
   document.getElementById('pctWin').textContent  = total ? pct(w1)+'%'  : '–';
   document.getElementById('pctG1').textContent   = total ? pct(w2)+'%'  : '–';
   document.getElementById('pctG2').textContent   = total ? pct(w3)+'%'  : '–';
@@ -685,21 +689,25 @@ function renderHistory(page = 0) {
     return;
   }
 
-  // Filter by tab period
+  // Todas as sessões são exibidas, agrupadas por dia/semana/mês
+  // Os cards de analytics mostram o período ATUAL (hoje / semana atual / mês atual)
   const now = new Date();
-  let filtered = sessions;
+  const todayKey   = now.toISOString().slice(0,10);
+  const weekKey    = getWeekKey(todayKey);
+  const monthKey   = now.toISOString().slice(0,7);
+
+  let analyticsFilter;
   if (currentHistoryTab === 'day') {
-    const today = now.toISOString().slice(0,10);
-    filtered = sessions.filter(s => s.hour.startsWith(today));
+    analyticsFilter = sessions.filter(s => s.hour.startsWith(todayKey));
   } else if (currentHistoryTab === 'week') {
-    const weekStart = getWeekKey(now.toISOString().slice(0,10));
-    filtered = sessions.filter(s => getWeekKey(s.hour.slice(0,10)) === weekStart);
+    analyticsFilter = sessions.filter(s => getWeekKey(s.hour.slice(0,10)) === weekKey);
   } else {
-    const monthKey = now.toISOString().slice(0,7);
-    filtered = sessions.filter(s => s.hour.startsWith(monthKey));
+    analyticsFilter = sessions.filter(s => s.hour.startsWith(monthKey));
   }
 
-  renderAnalytics(filtered);
+  const filtered = sessions.slice(); // tabela mostra tudo, agrupado
+
+  renderAnalytics(analyticsFilter);
 
   if (!filtered.length) {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Sem sessões neste período.</div></div>`;
@@ -836,14 +844,24 @@ function startAutoFetch() {
     historicalLoaded = true;
   });
 
-  // Atualiza ao vivo a cada 5 seg nos momentos certos (1 min após vela fechar)
+  // Atualiza ao vivo a cada 5 seg nos momentos certos (1 min após vela de 15min fechar)
   setInterval(() => {
     const now = new Date();
-    // Dispara 1 min após cada vela de 15min fechar (minutos 1, 16, 31, 46)
-    if ((now.getUTCMinutes() % 15 === 1) && now.getUTCSeconds() < 10) {
+    const min = now.getUTCMinutes();
+    const sec = now.getUTCSeconds();
+    // Dispara nos minutos 1, 16, 31, 46 (1 min após cada vela de 15min fechar)
+    // Janela de 20 segundos para garantir que a API já tem os dados
+    if ((min % 15 === 1) && sec < 20) {
+      fetchCandles(false);
+    }
+    // Segunda tentativa aos 2 minutos caso a primeira falhe
+    if ((min % 15 === 2) && sec < 10) {
       fetchCandles(false);
     }
   }, 5000);
+
+  // Também atualiza a cada 15 minutos por garantia
+  setInterval(() => fetchCandles(false), 15 * 60 * 1000);
 }
 
 // ==========================================
