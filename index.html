@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CatalogFX PRO — EUR/USD M15 Strategy</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f14; --bg2: #12151c; --bg3: #181c26; --bg4: #1e2330;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.12);
+    --text: #e8eaf0; --text2: #8892a4; --text3: #4d5669;
+    --green: #00c896; --green2: rgba(0,200,150,0.12);
+    --red: #f0486a; --red2: rgba(240,72,106,0.12);
+    --blue: #4f8ef7; --blue2: rgba(79,142,247,0.12);
+    --amber: #f5a623; --amber2: rgba(245,166,35,0.12);
+    --purple: #9b6dff; --purple2: rgba(155,109,255,0.12);
+    --accent: #4f8ef7; --radius: 10px; --radius2: 14px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--text); font-size: 13px; line-height: 1.5; }
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+  /* TICKER */
+  .ticker-bar { height: 28px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; overflow: hidden; }
+  .ticker-inner { display: flex; gap: 40px; animation: ticker 30s linear infinite; white-space: nowrap; padding: 0 20px; }
+  @keyframes ticker { 0%{transform:translateX(0)} 100%{transform:translateX(-50%)} }
+  .ticker-item { font-size: 11px; color: var(--text2); display: flex; align-items: center; gap: 6px; }
+  .ticker-symbol { color: var(--text); font-weight: 600; }
+
+  /* HEADER */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 0 20px; height: 52px; background: var(--bg2); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .logo { display: flex; align-items: center; gap: 8px; }
+  .logo-icon { width: 28px; height: 28px; background: linear-gradient(135deg, #4f8ef7, #9b6dff); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; }
+  .logo-text { font-size: 14px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .logo-badge { font-size: 9px; font-weight: 600; background: var(--blue2); color: var(--blue); border: 1px solid rgba(79,142,247,0.25); padding: 2px 6px; border-radius: 4px; letter-spacing: 0.5px; }
+  .header-nav { display: flex; align-items: center; gap: 2px; }
+  .nav-btn { padding: 5px 12px; border-radius: 6px; font-size: 12.5px; color: var(--text2); cursor: pointer; transition: all 0.15s; background: none; border: none; }
+  .nav-btn:hover { background: var(--bg3); color: var(--text); }
+  .nav-btn.active { background: var(--bg4); color: var(--text); }
+  .header-right { display: flex; align-items: center; gap: 8px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+  .status-dot.closed { background: var(--red); box-shadow: 0 0 8px var(--red); animation: none; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .status-text { font-size: 11.5px; color: var(--text2); }
+  .btn { padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: var(--bg3); color: var(--text); transition: all 0.15s; }
+  .btn:hover { background: var(--bg4); }
+  .btn-primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  .btn-primary:hover { background: #3d7de0; }
+
+  /* MARKET STATUS BANNER */
+  .market-banner { display: none; align-items: center; justify-content: center; gap: 10px; padding: 8px 20px; font-size: 12px; font-weight: 600; }
+  .market-banner.closed { display: flex; background: rgba(240,72,106,0.1); border-bottom: 1px solid rgba(240,72,106,0.2); color: var(--red); }
+  .market-banner.open { display: flex; background: rgba(0,200,150,0.08); border-bottom: 1px solid rgba(0,200,150,0.15); color: var(--green); }
+
+  /* TABS */
+  .tabs { display: flex; gap: 0; background: var(--bg2); border-bottom: 1px solid var(--border); }
+  .tab { padding: 10px 20px; font-size: 12.5px; font-weight: 500; cursor: pointer; color: var(--text3); border-bottom: 2px solid transparent; transition: all 0.15s; }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab:hover { color: var(--text2); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* MAIN LAYOUT */
+  .main { display: grid; grid-template-columns: 1fr 340px; height: calc(100vh - 130px); overflow: hidden; }
+  .left-col { display: flex; flex-direction: column; border-right: 1px solid var(--border); overflow: hidden; }
+  .right-col { display: flex; flex-direction: column; background: var(--bg2); overflow-y: auto; }
+  .right-col::-webkit-scrollbar { width: 4px; }
+  .right-col::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+
+  /* SYMBOL BAR */
+  .symbol-bar { display: flex; align-items: center; gap: 16px; padding: 10px 20px; background: var(--bg2); border-bottom: 1px solid var(--border); flex-wrap: wrap; flex-shrink: 0; }
+  .price-display { font-size: 22px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+  .price-change { font-size: 12px; font-weight: 500; }
+  .up { color: var(--green); }
+  .down { color: var(--red); }
+  .symbol-meta { display: flex; gap: 16px; margin-left: auto; }
+  .meta-item { text-align: right; }
+  .meta-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .meta-val { font-size: 12px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+  .tf-selector { display: flex; gap: 2px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 3px; }
+  .tf-btn { padding: 3px 9px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer; color: var(--text3); transition: all 0.15s; }
+  .tf-btn.active { background: var(--bg4); color: var(--text); }
+
+  /* CHART */
+  .chart-wrapper { flex: 1; min-height: 300px; position: relative; background: var(--bg); overflow: hidden; }
+
+  /* STATS ROW */
+  .stats-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--border); border-top: 1px solid var(--border); flex-shrink: 0; }
+  .stat-card { background: var(--bg2); padding: 12px 16px; }
+  .stat-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .stat-value { font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+  .stat-sub { font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  /* RIGHT PANEL */
+  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text3); }
+  .panel-action { font-size: 11px; color: var(--blue); cursor: pointer; }
+
+  /* SIGNAL BOX */
+  .signal-box { margin: 12px; border-radius: var(--radius2); border: 1px solid var(--border); background: var(--bg3); overflow: hidden; }
+  .signal-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .signal-title { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; }
+  .signal-time { font-size: 11px; color: var(--text2); font-variant-numeric: tabular-nums; }
+  .signal-body { padding: 14px; }
+  .signal-direction { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .direction-badge { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: 8px; font-size: 15px; font-weight: 700; letter-spacing: 0.5px; }
+  .badge-call { background: var(--green2); color: var(--green); border: 1px solid rgba(0,200,150,0.2); }
+  .badge-put { background: var(--red2); color: var(--red); border: 1px solid rgba(240,72,106,0.2); }
+  .badge-wait { background: var(--bg4); color: var(--text3); border: 1px solid var(--border); }
+  .signal-ref { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+  .signal-ref span { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .gale-tracker { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+  .gale-item { background: var(--bg4); border-radius: 7px; padding: 8px; text-align: center; border: 1px solid var(--border); transition: all 0.3s; }
+  .gale-item.active { border-color: var(--amber); background: var(--amber2); }
+  .gale-item.win { border-color: var(--green); background: var(--green2); }
+  .gale-item.loss { border-color: var(--red); background: var(--red2); }
+  .gale-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); }
+  .gale-status { font-size: 16px; margin-top: 2px; }
+
+  /* MANUAL ENTRY FORM */
+  .entry-form { margin: 12px; border-radius: var(--radius2); border: 1px solid var(--border); background: var(--bg3); overflow: hidden; }
+  .entry-form-header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; }
+  .entry-form-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-label { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .form-select, .form-input { background: var(--bg4); border: 1px solid var(--border2); border-radius: 6px; padding: 7px 10px; font-size: 12px; color: var(--text); width: 100%; outline: none; }
+  .form-select:focus, .form-input:focus { border-color: var(--blue); }
+  .form-select option { background: var(--bg3); }
+  .btn-register { width: 100%; padding: 9px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; border: none; background: var(--blue); color: #fff; transition: all 0.15s; margin-top: 4px; }
+  .btn-register:hover { background: #3d7de0; }
+  .btn-register:disabled { opacity: 0.4; cursor: not-allowed; }
+  .market-closed-msg { font-size: 11px; color: var(--red); text-align: center; padding: 8px; background: var(--red2); border-radius: 6px; display: none; }
+
+  /* DISTRIBUTION BARS */
+  .winrate-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .wr-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .wr-label { font-size: 11px; color: var(--text2); width: 68px; flex-shrink: 0; }
+  .wr-bar-bg { flex: 1; height: 5px; background: var(--bg4); border-radius: 3px; overflow: hidden; }
+  .wr-bar { height: 100%; border-radius: 3px; transition: width 1s cubic-bezier(0.4,0,0.2,1); }
+  .wr-pct { font-size: 11px; font-weight: 600; width: 36px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* HISTORY */
+  .history-list { flex: 1; overflow-y: auto; }
+  .history-list::-webkit-scrollbar { width: 4px; }
+  .history-list::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 2px; }
+  .history-item { display: grid; grid-template-columns: auto 1fr auto auto; gap: 8px; align-items: center; padding: 9px 16px; border-bottom: 1px solid var(--border); transition: background 0.15s; }
+  .history-item:hover { background: var(--bg3); }
+  .history-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .history-time-main { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text); }
+  .history-time-sub { font-size: 10px; color: var(--text3); }
+  .history-dir { font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 5px; }
+  .dir-call { background: var(--green2); color: var(--green); }
+  .dir-put { background: var(--red2); color: var(--red); }
+  .result-badge { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .rb-win { background: var(--green2); color: var(--green); }
+  .rb-g1 { background: var(--blue2); color: var(--blue); }
+  .rb-g2 { background: var(--amber2); color: var(--amber); }
+  .rb-loss { background: var(--red2); color: var(--red); }
+  .result-level { font-size: 10px; color: var(--text3); margin-top: 1px; text-align: right; }
+  .history-del { font-size: 11px; color: var(--text3); cursor: pointer; padding: 2px 4px; border-radius: 3px; }
+  .history-del:hover { color: var(--red); background: var(--red2); }
+
+  /* STRATEGY CARD */
+  .strat-card { margin: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius2); padding: 14px; }
+  .strat-title { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: var(--text3); margin-bottom: 10px; }
+  .strat-row { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--border); }
+  .strat-row:last-child { border-bottom: none; }
+  .strat-key { font-size: 11px; color: var(--text2); }
+  .strat-val { font-size: 11px; font-weight: 600; color: var(--text); }
+
+  /* HORARIO TABLE */
+  .horario-card { margin: 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius2); overflow: hidden; }
+  .horario-header { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; display: flex; justify-content: space-between; align-items: center; }
+  .horario-header span { color: var(--text2); font-size: 10px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .horario-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 14px; border-bottom: 1px solid var(--border); }
+  .horario-row:last-child { border-bottom: none; }
+  .horario-day { font-size: 11px; font-weight: 600; color: var(--text); width: 40px; }
+  .horario-times { font-size: 11px; color: var(--text2); flex: 1; }
+  .horario-status { font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .hs-open { background: var(--green2); color: var(--green); }
+  .hs-closed { background: var(--red2); color: var(--red); }
+  .hs-partial { background: var(--amber2); color: var(--amber); }
+  .hs-current { background: var(--blue2); color: var(--blue); border: 1px solid rgba(79,142,247,0.3); }
+
+  /* HISTORY PAGE */
+  .history-page { display: none; padding: 20px; overflow-y: auto; height: calc(100vh - 130px); }
+  .history-page.active { display: block; }
+  .history-page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .history-page-title { font-size: 16px; font-weight: 700; color: var(--text); }
+  .history-filters { display: flex; gap: 8px; margin-bottom: 16px; }
+  .filter-btn { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: var(--bg3); color: var(--text2); transition: all 0.15s; }
+  .filter-btn.active { background: var(--blue2); color: var(--blue); border-color: rgba(79,142,247,0.3); }
+  .full-history-table { width: 100%; border-collapse: collapse; }
+  .full-history-table th { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: left; }
+  .full-history-table td { font-size: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text); font-variant-numeric: tabular-nums; }
+  .full-history-table tr:hover td { background: var(--bg3); }
+
+  /* TOAST */
+  .toast { position: fixed; top: 84px; right: 20px; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 10px 14px; font-size: 12px; z-index: 9999; transform: translateX(120%); transition: transform 0.3s cubic-bezier(0.4,0,0.2,1); box-shadow: 0 8px 32px rgba(0,0,0,0.5); max-width: 260px; }
+  .toast.show { transform: translateX(0); }
+  .toast-title { font-weight: 600; margin-bottom: 2px; }
+  .toast-body { color: var(--text2); }
+
+  .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; color: var(--text3); }
+  .empty-icon { font-size: 28px; margin-bottom: 8px; opacity: 0.5; }
+  .empty-text { font-size: 12px; text-align: center; }
+
+  /* AUTO REGISTER */
+  .auto-register-card { margin: 12px; border-radius: var(--radius2); border: 1px solid var(--border); background: var(--bg3); overflow: hidden; }
+  .auto-register-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .auto-register-title { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.6px; }
+  .auto-toggle { display: flex; align-items: center; gap: 8px; }
+  .toggle-switch { position: relative; width: 36px; height: 20px; cursor: pointer; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: var(--bg4); border-radius: 20px; transition: 0.3s; border: 1px solid var(--border2); }
+  .toggle-slider:before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 2px; background: var(--text3); border-radius: 50%; transition: 0.3s; }
+  input:checked + .toggle-slider { background: var(--green2); border-color: var(--green); }
+  input:checked + .toggle-slider:before { transform: translateX(16px); background: var(--green); }
+  .toggle-label { font-size: 11px; color: var(--text2); }
+  .auto-register-body { padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+  .auto-status-row { display: flex; justify-content: space-between; align-items: center; }
+  .auto-status-label { font-size: 11px; color: var(--text2); }
+  .auto-status-val { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .auto-log { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px; max-height: 80px; overflow-y: auto; font-size: 10px; color: var(--text3); font-family: monospace; }
+  .auto-log-entry { padding: 1px 0; }
+  .auto-log-entry.call { color: var(--green); }
+  .auto-log-entry.put { color: var(--red); }
+  .auto-log-entry.info { color: var(--text3); }
+  .auto-badge { font-size: 9px; font-weight: 600; background: var(--purple2); color: var(--purple); border: 1px solid rgba(155,109,255,0.2); padding: 1px 5px; border-radius: 3px; margin-left: 4px; }
+  .snapshot-preview { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+  .snap-row { display: flex; justify-content: space-between; font-size: 11px; }
+  .snap-key { color: var(--text3); }
+  .snap-val { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  @media(max-width: 768px) {
+    .main { grid-template-columns: 1fr; }
+    .right-col { max-height: none; }
+    .stats-row { grid-template-columns: repeat(3, 1fr); }
+    .symbol-meta { display: none; }
+    .header-nav { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TICKER -->
+  <div class="ticker-bar">
+    <div class="ticker-inner" id="tickerInner"></div>
+  </div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-left">
+      <div class="logo">
+        <div class="logo-icon">C</div>
+        <span class="logo-text">CatalogFX</span>
+        <span class="logo-badge">PRO</span>
+      </div>
+      <div class="header-nav">
+        <button class="nav-btn active" onclick="showPage('dashboard')">Dashboard</button>
+        <button class="nav-btn" onclick="showPage('historico')">Histórico</button>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-dot" id="headerStatusDot"></div>
+      <span class="status-text" id="headerStatusText">EUR/USD</span>
+      <span class="btn" id="clockDisplay" style="font-variant-numeric:tabular-nums;cursor:default;">00:00:00</span>
+    </div>
+  </div>
+
+  <!-- MARKET BANNER -->
+  <div class="market-banner" id="marketBanner">
+    <span id="marketBannerIcon">🔴</span>
+    <span id="marketBannerText">Mercado Fechado — Sábado (UTC-3)</span>
+  </div>
+
+  <!-- DASHBOARD PAGE -->
+  <div id="page-dashboard">
+    <!-- MAIN LAYOUT -->
+    <div class="main">
+      <!-- LEFT COLUMN -->
+      <div class="left-col">
+        <div class="symbol-bar">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+              <span style="font-size:15px;font-weight:700;letter-spacing:-0.3px;">EUR/USD</span>
+              <span style="font-size:10px;color:var(--text3);background:var(--bg4);padding:2px 7px;border-radius:4px;font-weight:600;">IQ Option · M15</span>
+            </div>
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span class="price-display" id="livePrice">1.15674</span>
+              <span class="price-change up" id="priceChange">+0.00041 (+0.035%)</span>
+            </div>
+          </div>
+          <div class="symbol-meta">
+            <div class="meta-item"><div class="meta-label">Abertura</div><div class="meta-val">1.15633</div></div>
+            <div class="meta-item"><div class="meta-label">Sessão Seg-Sex</div><div class="meta-val up">00:00–17:00</div></div>
+            <div class="meta-item"><div class="meta-label">Spread</div><div class="meta-val">0.8</div></div>
+          </div>
+          <div class="tf-selector">
+            <div class="tf-btn">M5</div>
+            <div class="tf-btn active">M15</div>
+            <div class="tf-btn">H1</div>
+          </div>
+        </div>
+
+        <!-- CHART: TradingView Real Widget -->
+        <div class="chart-wrapper" id="chartWrap">
+          <div class="tradingview-widget-container" style="width:100%;height:100%;">
+            <div id="tradingview_eurusd" style="width:100%;height:100%;"></div>
+            <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+            <script type="text/javascript">
+            new TradingView.widget({
+              container_id: "tradingview_eurusd",
+              autosize: true,
+              symbol: "OANDA:EURUSD",
+              interval: "15",
+              timezone: "America/Sao_Paulo",
+              theme: "dark",
+              style: "1",
+              locale: "br",
+              toolbar_bg: "#12151c",
+              enable_publishing: false,
+              hide_top_toolbar: false,
+              hide_legend: false,
+              save_image: false,
+              backgroundColor: "#0d0f14",
+              gridColor: "rgba(255,255,255,0.04)",
+              hide_volume: false,
+              studies: ["RSI@tv-basicstudies"],
+              withdateranges: false,
+              allow_symbol_change: false,
+              details: false,
+              hotlist: false,
+              calendar: false,
+            });
+            </script>
+          </div>
+        </div>
+
+        <!-- STATS ROW -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Total Entradas</div>
+            <div class="stat-value" id="statTotal" style="color:var(--text)">0</div>
+            <div class="stat-sub">Todos os dias</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Taxa de Acerto</div>
+            <div class="stat-value up" id="statWinRate">—</div>
+            <div class="stat-sub">Win + Gales</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Seq. Vitórias</div>
+            <div class="stat-value up" id="statWinStreak">0</div>
+            <div class="stat-sub">Consecutivo</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Seq. Perdas</div>
+            <div class="stat-value down" id="statLossStreak">0</div>
+            <div class="stat-sub">Consecutivo</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Desempenho</div>
+            <div class="stat-value" id="statPerf" style="color:var(--amber)">—</div>
+            <div class="stat-sub">Score geral</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT COLUMN -->
+      <div class="right-col">
+        <div class="panel-header">
+          <span class="panel-title">Sinal Atual</span>
+          <span id="signalClock" style="font-size:11px;color:var(--text2);font-variant-numeric:tabular-nums;">00:00:00</span>
+        </div>
+
+        <!-- SIGNAL BOX -->
+        <div class="signal-box">
+          <div class="signal-header">
+            <span class="signal-title">Vela de Referência (1ª da Hora)</span>
+            <span class="signal-time" id="refCandleTime">—</span>
+          </div>
+          <div class="signal-body">
+            <div class="signal-direction">
+              <div class="direction-badge badge-wait" id="directionBadge">
+                <span id="dirArrow">⏳</span>
+                <span id="dirText">AGUARDANDO</span>
+              </div>
+              <div style="font-size:11px;color:var(--text3);" id="marketStatusLabel"></div>
+            </div>
+            <div class="signal-ref">Próxima vela: <span id="nextCandleIn">—</span></div>
+            <div class="signal-ref">Hora atual (UTC-3): <span id="currentTimeUTC3">—</span></div>
+            <div class="gale-tracker">
+              <div class="gale-item" id="gale0"><div class="gale-label">Win Direto</div><div class="gale-status" id="galeIcon0">○</div></div>
+              <div class="gale-item" id="gale1"><div class="gale-label">Gale 1</div><div class="gale-status" id="galeIcon1">○</div></div>
+              <div class="gale-item" id="gale2"><div class="gale-label">Gale 2</div><div class="gale-status" id="galeIcon2">○</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- MANUAL ENTRY FORM -->
+        <div class="entry-form">
+          <div class="entry-form-header">📝 Registrar Entrada Manual</div>
+          <div class="entry-form-body">
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Direção</label>
+                <select class="form-select" id="inputDir">
+                  <option value="CALL">↑ CALL (Alta)</option>
+                  <option value="PUT">↓ PUT (Baixa)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Resultado</label>
+                <select class="form-select" id="inputResult">
+                  <option value="Win Direto">✅ Win Direto</option>
+                  <option value="Gale 1">🔵 Gale 1</option>
+                  <option value="Gale 2">🟡 Gale 2</option>
+                  <option value="Loss">❌ Loss</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Data</label>
+                <input type="date" class="form-input" id="inputDate">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Horário (XX:00)</label>
+                <input type="time" class="form-input" id="inputTime" step="900">
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Observação (opcional)</label>
+              <input type="text" class="form-input" id="inputObs" placeholder="Ex: RSI sobrevendido, tendência forte…">
+            </div>
+            <div class="market-closed-msg" id="closedMsg">⚠️ Mercado fechado neste horário — registro permitido apenas para conferência</div>
+            <button class="btn-register" id="btnRegister" onclick="registerEntry()">+ Registrar Entrada</button>
+          </div>
+        </div>
+
+        <!-- AUTO REGISTER -->
+        <div class="auto-register-card">
+          <div class="auto-register-header">
+            <span class="auto-register-title">🤖 Registro Automático de Velas</span>
+            <div class="auto-toggle">
+              <label class="toggle-switch">
+                <input type="checkbox" id="autoToggle" onchange="toggleAutoRegister(this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+              <span class="toggle-label" id="autoToggleLabel">Desligado</span>
+            </div>
+          </div>
+          <div class="auto-register-body">
+            <div class="snapshot-preview" id="liveSnapshot">
+              <div class="snap-row"><span class="snap-key">Preço Atual</span><span class="snap-val" id="snapPrice">—</span></div>
+              <div class="snap-row"><span class="snap-key">RSI (14)</span><span class="snap-val" id="snapRSI">—</span></div>
+              <div class="snap-row"><span class="snap-key">Tendência</span><span class="snap-val" id="snapTrend">—</span></div>
+              <div class="snap-row"><span class="snap-key">Sinal M15</span><span class="snap-val" id="snapSignal">—</span></div>
+              <div class="snap-row"><span class="snap-key">Próx. Registro</span><span class="snap-val" id="snapNextReg">—</span></div>
+            </div>
+            <div class="auto-status-row">
+              <span class="auto-status-label">Registros automáticos hoje</span>
+              <span class="auto-status-val" id="autoCountToday" style="color:var(--purple)">0</span>
+            </div>
+            <div class="auto-status-row">
+              <span class="auto-status-label">Último registro auto</span>
+              <span class="auto-status-val" id="autoLastReg" style="color:var(--text2)">—</span>
+            </div>
+            <div class="auto-log" id="autoLog">
+              <div class="auto-log-entry info">» Sistema pronto. Ative o registro automático.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STRATEGY CONFIG -->
+        <div class="strat-card">
+          <div class="strat-title">Configuração da Estratégia</div>
+          <div class="strat-row"><span class="strat-key">Ativo</span><span class="strat-val">EUR/USD (IQ Option)</span></div>
+          <div class="strat-row"><span class="strat-key">Timeframe</span><span class="strat-val">M15 (Blitz)</span></div>
+          <div class="strat-row"><span class="strat-key">Vela de referência</span><span class="strat-val">1ª vela da hora (XX:00)</span></div>
+          <div class="strat-row"><span class="strat-key">Indicador</span><span class="strat-val">RSI (14)</span></div>
+          <div class="strat-row"><span class="strat-key">Máx. Gales</span><span class="strat-val">2 (Gale 1 + Gale 2)</span></div>
+          <div class="strat-row"><span class="strat-key">Início dos registros</span><span class="strat-val" style="color:var(--blue)">14/06/2026</span></div>
+        </div>
+
+        <!-- HORARIOS IQ OPTION -->
+        <div class="horario-card">
+          <div class="horario-header">Horários IQ Option — EUR/USD <span>UTC-3</span></div>
+          <div class="horario-row" id="hrSeg">
+            <span class="horario-day">Seg</span>
+            <span class="horario-times">00:00–17:00 / 22:00–23:59</span>
+            <span class="horario-status" id="hsSeg">—</span>
+          </div>
+          <div class="horario-row" id="hrTer">
+            <span class="horario-day">Ter</span>
+            <span class="horario-times">00:00–17:00 / 22:00–23:59</span>
+            <span class="horario-status" id="hsTer">—</span>
+          </div>
+          <div class="horario-row" id="hrQua">
+            <span class="horario-day">Qua</span>
+            <span class="horario-times">00:00–17:00 / 22:00–23:59</span>
+            <span class="horario-status" id="hsQua">—</span>
+          </div>
+          <div class="horario-row" id="hrQui">
+            <span class="horario-day">Qui</span>
+            <span class="horario-times">00:00–17:00 / 22:00–23:59</span>
+            <span class="horario-status" id="hsQui">—</span>
+          </div>
+          <div class="horario-row" id="hrSex">
+            <span class="horario-day">Sex</span>
+            <span class="horario-times">00:00–15:30</span>
+            <span class="horario-status" id="hsSex">—</span>
+          </div>
+          <div class="horario-row" id="hrSab">
+            <span class="horario-day">Sáb</span>
+            <span class="horario-times" style="color:var(--red)">Mercado Fechado</span>
+            <span class="horario-status" id="hsSab">—</span>
+          </div>
+          <div class="horario-row" id="hrDom">
+            <span class="horario-day">Dom</span>
+            <span class="horario-times">22:00–23:59</span>
+            <span class="horario-status" id="hsDom">—</span>
+          </div>
+        </div>
+
+        <!-- DISTRIBUTION -->
+        <div class="winrate-section">
+          <div class="panel-title" style="margin-bottom:10px;">Distribuição de Resultados</div>
+          <div class="wr-row">
+            <span class="wr-label">Win Direto</span>
+            <div class="wr-bar-bg"><div class="wr-bar" id="barWin" style="width:0%;background:var(--green)"></div></div>
+            <span class="wr-pct up" id="pctWin">—</span>
+          </div>
+          <div class="wr-row">
+            <span class="wr-label">Gale 1</span>
+            <div class="wr-bar-bg"><div class="wr-bar" id="barG1" style="width:0%;background:var(--blue)"></div></div>
+            <span class="wr-pct" style="color:var(--blue)" id="pctG1">—</span>
+          </div>
+          <div class="wr-row">
+            <span class="wr-label">Gale 2</span>
+            <div class="wr-bar-bg"><div class="wr-bar" id="barG2" style="width:0%;background:var(--amber)"></div></div>
+            <span class="wr-pct" style="color:var(--amber)" id="pctG2">—</span>
+          </div>
+          <div class="wr-row">
+            <span class="wr-label">Loss</span>
+            <div class="wr-bar-bg"><div class="wr-bar" id="barLoss" style="width:0%;background:var(--red)"></div></div>
+            <span class="wr-pct down" id="pctLoss">—</span>
+          </div>
+        </div>
+
+        <!-- RECENT HISTORY -->
+        <div class="panel-header">
+          <span class="panel-title">Últimas Entradas</span>
+          <span class="panel-action" onclick="showPage('historico')">Ver tudo →</span>
+        </div>
+        <div class="history-list" id="historyList" style="max-height:300px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HISTORICO PAGE -->
+  <div id="page-historico" class="history-page">
+    <div class="history-page-header">
+      <div>
+        <div class="history-page-title">📋 Histórico Completo</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px;">Registros a partir de 14/06/2026 · Salvo localmente</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn" onclick="exportCSV()">⬇ Exportar CSV</button>
+        <button class="btn" style="color:var(--red);border-color:rgba(240,72,106,0.3);" onclick="clearAll()">🗑 Limpar Tudo</button>
+      </div>
+    </div>
+    <div class="history-filters">
+      <button class="filter-btn active" onclick="setFilter('all',this)">Todos</button>
+      <button class="filter-btn" onclick="setFilter('Win Direto',this)">Win Direto</button>
+      <button class="filter-btn" onclick="setFilter('Gale 1',this)">Gale 1</button>
+      <button class="filter-btn" onclick="setFilter('Gale 2',this)">Gale 2</button>
+      <button class="filter-btn" onclick="setFilter('Loss',this)">Loss</button>
+    </div>
+    <div id="summaryCards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;"></div>
+    <table class="full-history-table" id="fullHistoryTable">
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Horário</th>
+          <th>Direção</th>
+          <th>Resultado</th>
+          <th>Observação</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="fullHistoryBody"></tbody>
+    </table>
+    <div id="historyEmpty" class="empty" style="display:none;">
+      <div class="empty-icon">📋</div>
+      <div class="empty-text">Nenhuma entrada registrada ainda.<br>Use o formulário no Dashboard para registrar.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">
+  <div class="toast-title" id="toastTitle"></div>
+  <div class="toast-body" id="toastBody"></div>
+</div>
+
+<script type="module">
+// =============================================
+// FIREBASE CONFIG
+// =============================================
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc, query, orderBy, writeBatch }
+  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCLvmH6Zj_xIlddF_YTQkMdiRXZSgsCZH4",
+  authDomain: "daytrade15m-38488.firebaseapp.com",
+  projectId: "daytrade15m-38488",
+  storageBucket: "daytrade15m-38488.firebasestorage.app",
+  messagingSenderId: "1044092199769",
+  appId: "1:1044092199769:web:979a2aedf5f45305c9a248"
+};
+
+const _app = initializeApp(firebaseConfig);
+const _db  = getFirestore(_app);
+window._db = _db;
+window._col = () => collection(_db, "history");
+window._fbAddDoc    = addDoc;
+window._fbGetDocs   = getDocs;
+window._fbDeleteDoc = deleteDoc;
+window._fbDoc       = doc;
+window._fbQuery     = query;
+window._fbOrderBy   = orderBy;
+window._fbWriteBatch = writeBatch;
+
+// Aguarda DOM e inicia app
+window.addEventListener('load', () => {
+  if (typeof window._appInit === 'function') window._appInit();
+});
+
+// =============================================
+// HORÁRIOS IQ OPTION (UTC-3) EUR/USD
+// Seg-Qui: 00:00-17:00 e 22:00-23:59
+// Sex: 00:00-15:30
+// Sáb: FECHADO
+// Dom: 22:00-23:59
+// =============================================
+
+const STORAGE_KEY = 'catalogfx_history_v2';
+const START_DATE  = '2026-06-14'; // data de início dos registros
+
+// ---------- Utilitários de tempo ----------
+function getUTC3() {
+  const now = new Date();
+  // UTC-3 = UTC - 3h
+  const utc3 = new Date(now.getTime() - 3 * 3600000);
+  return utc3;
+}
+
+function isMarketOpen(dt) {
+  // dt é um objeto Date em UTC-3
+  const day = dt.getUTCDay(); // 0=Dom,1=Seg,...,6=Sáb
+  const h = dt.getUTCHours();
+  const m = dt.getUTCMinutes();
+  const totalMin = h * 60 + m;
+
+  if (day === 6) return false; // Sábado: fechado
+  if (day === 0) return totalMin >= 22 * 60; // Dom: 22:00-23:59
+  if (day >= 1 && day <= 4) { // Seg-Qui
+    return (totalMin < 17 * 60) || (totalMin >= 22 * 60);
+  }
+  if (day === 5) { // Sexta
+    return totalMin < 15 * 60 + 30; // 00:00-15:30
+  }
+  return false;
+}
+
+function isMarketOpenForDatetime(dateStr, timeStr) {
+  // Verifica se um dado data+hora estava aberto
+  const [y, mo, d] = dateStr.split('-').map(Number);
+  const [h, mi] = timeStr.split(':').map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d, h, mi));
+  return isMarketOpen(dt);
+}
+
+function dayName(dt) {
+  return ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][dt.getUTCDay()];
+}
+
+function pad(n) { return String(n).padStart(2, '0'); }
+function fmt5(n) { return n.toFixed(5); }
+function fmtDate(d) {
+  const dt = new Date(d);
+  return `${pad(dt.getDate())}/${pad(dt.getMonth()+1)}/${dt.getFullYear()}`;
+}
+
+// ---------- Firebase persistência ----------
+async function loadHistory() {
+  try {
+    const q = window._fbQuery(window._col(), window._fbOrderBy("id", "desc"));
+    const snap = await window._fbGetDocs(q);
+    return snap.docs.map(d => ({ ...d.data(), _docId: d.id }));
+  } catch(e) { console.error("Erro ao carregar:", e); return []; }
+}
+
+async function saveHistory(arr) {
+  // Mantém localStorage como backup local
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(arr)); } catch(e) {}
+}
+
+async function addEntryToFirebase(entry) {
+  try {
+    const docRef = await window._fbAddDoc(window._col(), entry);
+    return docRef.id;
+  } catch(e) { console.error("Erro ao salvar no Firebase:", e); return null; }
+}
+
+async function deleteEntryFromFirebase(docId) {
+  try {
+    await window._fbDeleteDoc(window._fbDoc(window._db, "history", docId));
+  } catch(e) { console.error("Erro ao deletar:", e); }
+}
+
+async function clearAllFromFirebase() {
+  try {
+    const snap = await window._fbGetDocs(window._col());
+    const batch = window._fbWriteBatch(window._db);
+    snap.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+  } catch(e) { console.error("Erro ao limpar:", e); }
+}
+
+// ---------- Estado global ----------
+let state = {
+  history: [],
+  currentFilter: 'all',
+  stats: { total:0, wins:0, g1:0, g2:0, losses:0, winStreak:0, lossStreak:0, curWin:0, curLoss:0 }
+};
+
+// Recalcula stats a partir do histórico completo
+function recalcStats() {
+  const s = { total:0, wins:0, g1:0, g2:0, losses:0, winStreak:0, lossStreak:0, curWin:0, curLoss:0 };
+  // history está em ordem cronológica decrescente; iterar do mais antigo ao mais novo
+  const sorted = [...state.history].reverse();
+  for (const e of sorted) {
+    s.total++;
+    if (e.result === 'Win Direto') { s.wins++; s.curWin++; s.curLoss = 0; }
+    else if (e.result === 'Gale 1') { s.g1++; s.curWin++; s.curLoss = 0; }
+    else if (e.result === 'Gale 2') { s.g2++; s.curWin++; s.curLoss = 0; }
+    else { s.losses++; s.curWin = 0; s.curLoss++; }
+    s.winStreak = Math.max(s.winStreak, s.curWin);
+    s.lossStreak = Math.max(s.lossStreak, s.curLoss);
+  }
+  state.stats = s;
+}
+
+// ---------- Registro manual ----------
+async function registerEntry() {
+  const dir    = document.getElementById('inputDir').value;
+  const result = document.getElementById('inputResult').value;
+  const date   = document.getElementById('inputDate').value;
+  const time   = document.getElementById('inputTime').value;
+  const obs    = document.getElementById('inputObs').value.trim();
+
+  if (!date || !time) { showToast('⚠️ Atenção', 'Preencha data e horário', '#f5a623'); return; }
+  if (date < START_DATE) { showToast('⚠️ Data inválida', 'Registros só a partir de 14/06/2026', '#f0486a'); return; }
+
+  const entry = {
+    id: Date.now(),
+    date,
+    time,
+    direction: dir,
+    result,
+    obs,
+    marketOpen: isMarketOpenForDatetime(date, time)
+  };
+
+  const docId = await addEntryToFirebase(entry);
+  if (docId) entry._docId = docId;
+  state.history.unshift(entry);
+  saveHistory(state.history);
+  recalcStats();
+  updateStats();
+  renderHistoryList();
+  renderFullHistory();
+
+  // Limpa campos do formulário (exceto data e hora para facilitar múltiplos registros)
+  document.getElementById('inputObs').value = '';
+
+  const isWin = ['Win Direto','Gale 1','Gale 2'].includes(result);
+  showToast(
+    isWin ? `✅ ${result} registrado!` : '❌ Loss registrado',
+    `${dir} · ${time} · ${fmtDateBR(date)}`,
+    isWin ? '#00c896' : '#f0486a'
+  );
+}
+
+function fmtDateBR(str) {
+  if (!str) return '';
+  const [y, m, d] = str.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+async function deleteEntry(id) {
+  const entry = state.history.find(e => e.id === id);
+  if (entry && entry._docId) await deleteEntryFromFirebase(entry._docId);
+  state.history = state.history.filter(e => e.id !== id);
+  saveHistory(state.history);
+  recalcStats();
+  updateStats();
+  renderHistoryList();
+  renderFullHistory();
+  showToast('🗑 Removido', 'Entrada excluída do histórico', '#f5a623');
+}
+
+async function clearAll() {
+  if (!confirm('Tem certeza? Todos os registros serão apagados permanentemente.')) return;
+  await clearAllFromFirebase();
+  state.history = [];
+  saveHistory([]);
+  recalcStats();
+  updateStats();
+  renderHistoryList();
+  renderFullHistory();
+  showToast('🗑 Limpo', 'Histórico apagado', '#f0486a');
+}
+
+// ---------- Filtro ----------
+let currentFilter = 'all';
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderFullHistory();
+}
+
+// ---------- Render ----------
+function updateStats() {
+  const s = state.stats;
+  const t = s.total || 1;
+  document.getElementById('statTotal').textContent = s.total;
+  const wr = (s.wins + s.g1 + s.g2) / t * 100;
+  document.getElementById('statWinRate').textContent = s.total ? wr.toFixed(1)+'%' : '—';
+  document.getElementById('statWinStreak').textContent = s.winStreak;
+  document.getElementById('statLossStreak').textContent = s.lossStreak;
+  const perfEl = document.getElementById('statPerf');
+  if (s.total) {
+    perfEl.textContent = wr >= 70 ? '⭐ Ótimo' : wr >= 55 ? 'Bom' : 'Médio';
+    perfEl.style.color = wr >= 70 ? '#00c896' : wr >= 55 ? '#f5a623' : '#f0486a';
+  }
+  const fmt = n => s.total ? (n/t*100).toFixed(1)+'%' : '—';
+  document.getElementById('pctWin').textContent  = fmt(s.wins);
+  document.getElementById('pctG1').textContent   = fmt(s.g1);
+  document.getElementById('pctG2').textContent   = fmt(s.g2);
+  document.getElementById('pctLoss').textContent = fmt(s.losses);
+  if (s.total) {
+    document.getElementById('barWin').style.width  = (s.wins/t*100)+'%';
+    document.getElementById('barG1').style.width   = (s.g1/t*100)+'%';
+    document.getElementById('barG2').style.width   = (s.g2/t*100)+'%';
+    document.getElementById('barLoss').style.width = (s.losses/t*100)+'%';
+  }
+}
+
+function renderHistoryList() {
+  const list = document.getElementById('historyList');
+  const recent = state.history.slice(0, 20);
+  if (!recent.length) {
+    list.innerHTML = '<div class="empty"><div class="empty-icon">📋</div><div class="empty-text">Nenhuma entrada ainda.<br>Use o formulário acima para registrar.</div></div>';
+    return;
+  }
+  list.innerHTML = recent.map(e => {
+    const isWin = ['Win Direto','Gale 1','Gale 2'].includes(e.result);
+    const dotColor = isWin ? '#00c896' : '#f0486a';
+    const dirClass = e.direction === 'CALL' ? 'dir-call' : 'dir-put';
+    const rbClass  = e.result === 'Win Direto' ? 'rb-win' : e.result === 'Gale 1' ? 'rb-g1' : e.result === 'Gale 2' ? 'rb-g2' : 'rb-loss';
+    return `<div class="history-item">
+      <div class="history-dot" style="background:${dotColor};box-shadow:0 0 5px ${dotColor}"></div>
+      <div>
+        <div class="history-time-main">${e.time}</div>
+        <div class="history-time-sub">${fmtDateBR(e.date)}</div>
+      </div>
+      <div class="history-dir ${dirClass}">${e.direction}</div>
+      <div>
+        <div class="result-badge ${rbClass}">${isWin?'WIN':'LOSS'}${e.auto?'<span class="auto-badge">AUTO</span>':''}</div>
+        <div class="result-level">${e.result}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderFullHistory() {
+  const tbody = document.getElementById('fullHistoryBody');
+  const empty = document.getElementById('historyEmpty');
+  const summary = document.getElementById('summaryCards');
+
+  let filtered = currentFilter === 'all' ? state.history : state.history.filter(e => e.result === currentFilter);
+
+  // Summary cards
+  const total = filtered.length;
+  const wins = filtered.filter(e => ['Win Direto','Gale 1','Gale 2'].includes(e.result)).length;
+  const losses = filtered.filter(e => e.result === 'Loss').length;
+  const wr = total ? (wins/total*100).toFixed(1) : '—';
+  summary.innerHTML = [
+    {label:'Total', val: total, color:'var(--text)'},
+    {label:'Vitórias', val: wins, color:'var(--green)'},
+    {label:'Losses', val: losses, color:'var(--red)'},
+    {label:'Winrate', val: total ? wr+'%' : '—', color: parseFloat(wr)>=70?'var(--green)':parseFloat(wr)>=55?'var(--amber)':'var(--red)'},
+  ].map(c => `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 16px;">
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">${c.label}</div>
+    <div style="font-size:20px;font-weight:700;color:${c.color};font-variant-numeric:tabular-nums;">${c.val}</div>
+  </div>`).join('');
+
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const rbClass  = r => r === 'Win Direto' ? 'rb-win' : r === 'Gale 1' ? 'rb-g1' : r === 'Gale 2' ? 'rb-g2' : 'rb-loss';
+  const dirClass = d => d === 'CALL' ? 'dir-call' : 'dir-put';
+  const isWin    = r => ['Win Direto','Gale 1','Gale 2'].includes(r);
+
+  tbody.innerHTML = filtered.map(e => `
+    <tr>
+      <td>${fmtDateBR(e.date)}</td>
+      <td>${e.time}</td>
+      <td><span class="history-dir ${dirClass(e.direction)}" style="display:inline-block;">${e.direction}</span></td>
+      <td>
+        <span class="result-badge ${rbClass(e.result)}">${isWin(e.result)?'WIN':'LOSS'}</span>
+        <span style="font-size:10px;color:var(--text3);margin-left:5px;">${e.result}</span>
+        ${!e.marketOpen ? '<span style="font-size:9px;color:var(--amber);margin-left:4px;">⚠️fora</span>' : ''}
+        ${e.auto ? '<span class="auto-badge">AUTO</span>' : ''}
+      </td>
+      <td style="color:var(--text2);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${e.obs||(e.auto&&e.snapshot?`P:${e.snapshot.price} RSI:${e.snapshot.rsi}`:'—')}</td>
+      <td><span class="history-del" onclick="deleteEntry(${e.id})">✕</span></td>
+    </tr>
+  `).join('');
+}
+
+// ---------- Exportar CSV ----------
+function exportCSV() {
+  if (!state.history.length) { showToast('⚠️ Vazio', 'Nenhum dado para exportar', '#f5a623'); return; }
+  const header = 'Data,Horario,Direcao,Resultado,Observacao,MercadoAberto\n';
+  const rows = state.history.map(e =>
+    `${fmtDateBR(e.date)},${e.time},${e.direction},${e.result},"${e.obs||''}",${e.marketOpen?'Sim':'Nao'}`
+  ).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'catalogfx_eurusd_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+  showToast('⬇ Exportado', 'CSV salvo com sucesso', '#00c896');
+}
+
+// ---------- Toast ----------
+function showToast(title, body, color) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastTitle').textContent = title;
+  document.getElementById('toastTitle').style.color = color || 'var(--text)';
+  document.getElementById('toastBody').textContent = body;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 4000);
+}
+
+// ---------- Horários panel ----------
+function updateHorarioPanel() {
+  const now = getUTC3();
+  const day = now.getUTCDay(); // 0=Dom
+  const dayIds = ['hsDom','hsSeg','hsTer','hsQua','hsQui','hsSex','hsSab'];
+  const dayNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+
+  dayIds.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (i === day) {
+      // É o dia atual
+      const open = isMarketOpen(now);
+      el.textContent = open ? '● Aberto' : '● Fechado';
+      el.className = 'horario-status hs-current';
+    } else {
+      el.textContent = i === 6 ? 'Fechado' : '—';
+      el.className = 'horario-status';
+    }
+  });
+}
+
+// ---------- Market status ----------
+function updateMarketStatus() {
+  const now = getUTC3();
+  const open = isMarketOpen(now);
+  const banner = document.getElementById('marketBanner');
+  const dot = document.getElementById('headerStatusDot');
+  const statusText = document.getElementById('headerStatusText');
+  const label = document.getElementById('marketStatusLabel');
+  const closedMsg = document.getElementById('closedMsg');
+
+  if (open) {
+    banner.className = 'market-banner open';
+    banner.style.display = 'flex';
+    document.getElementById('marketBannerIcon').textContent = '🟢';
+    document.getElementById('marketBannerText').textContent = `Mercado Aberto — ${dayName(now)} (UTC-3)`;
+    dot.className = 'status-dot';
+    statusText.textContent = 'Mercado Aberto · EUR/USD';
+    if (label) label.textContent = '';
+    if (closedMsg) closedMsg.style.display = 'none';
+  } else {
+    banner.className = 'market-banner closed';
+    banner.style.display = 'flex';
+    document.getElementById('marketBannerIcon').textContent = '🔴';
+
+    // Calcular próxima abertura
+    const nextMsg = getNextOpenMsg(now);
+    document.getElementById('marketBannerText').textContent = `Mercado Fechado — ${dayName(now)} · ${nextMsg}`;
+    dot.className = 'status-dot closed';
+    statusText.textContent = 'Mercado Fechado · EUR/USD';
+    if (label) label.textContent = '⛔ Fechado agora';
+    if (closedMsg) closedMsg.style.display = 'block';
+  }
+}
+
+function getNextOpenMsg(dt) {
+  const day = dt.getUTCDay();
+  const h   = dt.getUTCHours();
+  const totalMin = h * 60 + dt.getUTCMinutes();
+
+  // Sex fechado a partir 15:30 → abre Dom 22:00
+  if (day === 5 && totalMin >= 15 * 60 + 30) return 'Abre Dom às 22:00';
+  // Sab → abre Dom 22:00
+  if (day === 6) return 'Abre Dom às 22:00';
+  // Dom antes 22:00 → abre às 22:00
+  if (day === 0 && totalMin < 22 * 60) return 'Abre hoje às 22:00';
+  // Seg-Qui entre 17:00-22:00 → abre às 22:00
+  if (day >= 1 && day <= 4 && totalMin >= 17 * 60 && totalMin < 22 * 60) return 'Abre hoje às 22:00';
+  return 'Fechando em breve';
+}
+
+// ---------- Relógio e countdown ----------
+function updateClock() {
+  const now = getUTC3();
+  const timeStr = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+  document.getElementById('clockDisplay').textContent = timeStr;
+  document.getElementById('signalClock').textContent = timeStr;
+  document.getElementById('currentTimeUTC3').textContent = timeStr;
+
+  // Countdown próxima vela M15
+  const secInCycle = (now.getUTCMinutes() % 15) * 60 + now.getUTCSeconds();
+  const secsLeft = 15 * 60 - secInCycle;
+  document.getElementById('nextCandleIn').textContent = `${pad(Math.floor(secsLeft / 60))}:${pad(secsLeft % 60)}`;
+
+  // Referência da vela atual (hora cheia)
+  const refH = now.getUTCHours();
+  const refM = now.getUTCMinutes();
+  document.getElementById('refCandleTime').textContent = `${pad(refH)}:00 → ${pad(refH)}:${pad(refM)}`;
+}
+
+// ---------- Ticker ----------
+function updateTicker() {
+  const pairs = [
+    { s:'EUR/USD', p:'1.15674', ch:+0.00041 },
+    { s:'GBP/USD', p:'1.27342', ch:-0.00089 },
+    { s:'USD/JPY', p:'149.231', ch:+0.142 },
+    { s:'USD/CHF', p:'0.90112', ch:-0.00023 },
+    { s:'AUD/USD', p:'0.65891', ch:+0.00031 },
+    { s:'USD/CAD', p:'1.36512', ch:-0.00051 },
+    { s:'NZD/USD', p:'0.60234', ch:+0.00018 },
+    { s:'EUR/GBP', p:'0.85012', ch:-0.00007 },
+  ];
+  const html = [...pairs, ...pairs].map(p => `
+    <span class="ticker-item">
+      <span class="ticker-symbol">${p.s}</span>
+      <span class="ticker-price">${p.p}</span>
+      <span style="color:${p.ch>=0?'#00c896':'#f0486a'};">${p.ch>=0?'+':''}${p.ch.toFixed(p.s.includes('JPY')?3:5)}</span>
+    </span>`).join('');
+  document.getElementById('tickerInner').innerHTML = html;
+}
+
+// ---------- Navegação entre páginas ----------
+function showPage(page) {
+  document.getElementById('page-dashboard').style.display = page === 'dashboard' ? 'block' : 'none';
+  document.getElementById('page-historico').style.display = page === 'historico' ? 'block' : 'none';
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('active', b.textContent.toLowerCase().includes(page === 'dashboard' ? 'dash' : 'hist'));
+  });
+  if (page === 'historico') { renderFullHistory(); }
+}
+
+// ---------- Inicializar form com data e hora atual ----------
+function initForm() {
+  const now = getUTC3();
+  const dateStr = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}`;
+  // Arredondar para hora cheia mais recente
+  const h = now.getUTCHours();
+  document.getElementById('inputDate').value = dateStr;
+  document.getElementById('inputDate').min = START_DATE;
+  document.getElementById('inputTime').value = `${pad(h)}:00`;
+}
+
+// ---------- Init (chamado por _appInit após Firebase carregar) ----------
+function initUI() {
+  recalcStats();
+  updateStats();
+  renderHistoryList();
+  renderFullHistory();
+  updateTicker();
+  updateClock();
+  updateMarketStatus();
+  updateHorarioPanel();
+  initForm();
+  showPage('dashboard');
+
+  setInterval(() => {
+    updateClock();
+    updateMarketStatus();
+    updateHorarioPanel();
+  }, 1000);
+
+  setInterval(updateTicker, 10000);
+}
+
+// =============================================
+// REGISTRO AUTOMÁTICO DE VELAS M15
+// Captura snapshot ao vivo a cada vela M15
+// e registra no histórico automaticamente.
+// =============================================
+
+let autoRegisterEnabled = false;
+let lastAutoCandle = null;       // 'YYYY-MM-DD HH:MM' da última vela registrada automaticamente
+let liveData = {
+  price: 1.15674,
+  prevPrice: 1.15633,
+  open: 1.15633,
+  high: 1.15710,
+  low: 1.15590,
+  rsi: 52.4,
+  prices: [],                    // array de preços para cálculo do RSI simulado
+  initialized: false
+};
+
+// Simula dados ao vivo com flutuação realista EUR/USD
+function simulateLivePrice() {
+  if (!liveData.initialized) {
+    // Inicializa com histórico de preços para RSI
+    let p = liveData.price;
+    for (let i = 0; i < 30; i++) {
+      p += (Math.random() - 0.5) * 0.0003;
+      liveData.prices.push(parseFloat(p.toFixed(5)));
+    }
+    liveData.initialized = true;
+  }
+
+  const now = getUTC3();
+  const secInCycle = (now.getUTCMinutes() % 15) * 60 + now.getUTCSeconds();
+
+  // Flutuação baseada na volatilidade típica EUR/USD (±0.8 pip por segundo)
+  const volatility = 0.00008;
+  const drift = (Math.random() - 0.498) * volatility;
+  liveData.prevPrice = liveData.price;
+  liveData.price = parseFloat((liveData.price + drift).toFixed(5));
+
+  // Atualiza high/low da vela atual
+  if (secInCycle === 0) {
+    // Nova vela: reset OHLC
+    liveData.open = liveData.price;
+    liveData.high = liveData.price;
+    liveData.low  = liveData.price;
+  } else {
+    liveData.high = Math.max(liveData.high, liveData.price);
+    liveData.low  = Math.min(liveData.low, liveData.price);
+  }
+
+  // Adiciona ao histórico de preços para RSI
+  liveData.prices.push(liveData.price);
+  if (liveData.prices.length > 50) liveData.prices.shift();
+
+  // Calcula RSI(14) Wilder
+  liveData.rsi = calcRSI(liveData.prices, 14);
+}
+
+function calcRSI(prices, period) {
+  if (prices.length < period + 1) return 50;
+  let gains = 0, losses = 0;
+  for (let i = prices.length - period; i < prices.length; i++) {
+    const diff = prices[i] - prices[i-1];
+    if (diff > 0) gains += diff;
+    else losses -= diff;
+  }
+  if (losses === 0) return 100;
+  const rs = gains / losses;
+  return parseFloat((100 - 100 / (1 + rs)).toFixed(1));
+}
+
+// Determina o sinal baseado no RSI e direção do preço
+function calcSignal() {
+  const rsi = liveData.rsi;
+  const priceDir = liveData.price > liveData.open ? 'up' : liveData.price < liveData.open ? 'down' : 'flat';
+
+  let signal = null;
+  let confidence = '';
+
+  if (rsi < 30) {
+    signal = 'CALL';
+    confidence = `RSI sobrevendido (${rsi})`;
+  } else if (rsi > 70) {
+    signal = 'PUT';
+    confidence = `RSI sobrecomprado (${rsi})`;
+  } else if (rsi < 45 && priceDir === 'up') {
+    signal = 'CALL';
+    confidence = `RSI baixo + preço subindo (${rsi})`;
+  } else if (rsi > 55 && priceDir === 'down') {
+    signal = 'PUT';
+    confidence = `RSI alto + preço caindo (${rsi})`;
+  } else if (priceDir === 'up') {
+    signal = 'CALL';
+    confidence = `Tendência de alta (RSI: ${rsi})`;
+  } else if (priceDir === 'down') {
+    signal = 'PUT';
+    confidence = `Tendência de baixa (RSI: ${rsi})`;
+  } else {
+    signal = null;
+    confidence = 'Lateral — sem sinal claro';
+  }
+
+  return { signal, confidence };
+}
+
+// Atualiza os dados ao vivo no preço da UI e no snapshot
+function updateLiveUI() {
+  const change = liveData.price - liveData.open;
+  const pct    = (change / liveData.open * 100).toFixed(3);
+  const sign   = change >= 0 ? '+' : '';
+
+  // Atualiza painel de preço principal
+  const priceEl  = document.getElementById('livePrice');
+  const changeEl = document.getElementById('priceChange');
+  if (priceEl) {
+    priceEl.textContent = liveData.price.toFixed(5);
+    priceEl.style.color = change >= 0 ? 'var(--green)' : 'var(--red)';
+  }
+  if (changeEl) {
+    changeEl.textContent = `${sign}${change.toFixed(5)} (${sign}${pct}%)`;
+    changeEl.className   = `price-change ${change >= 0 ? 'up' : 'down'}`;
+  }
+
+  // Snapshot no painel auto
+  const { signal, confidence } = calcSignal();
+  const priceDir = liveData.price > liveData.open ? '↑ Alta' : liveData.price < liveData.open ? '↓ Baixa' : '→ Lateral';
+
+  el('snapPrice').textContent  = liveData.price.toFixed(5);
+  el('snapRSI').textContent    = liveData.rsi;
+  el('snapRSI').style.color    = liveData.rsi < 30 ? 'var(--green)' : liveData.rsi > 70 ? 'var(--red)' : 'var(--text)';
+  el('snapTrend').textContent  = priceDir;
+  el('snapTrend').style.color  = change >= 0 ? 'var(--green)' : 'var(--red)';
+  el('snapSignal').textContent = signal ? `${signal} — ${confidence}` : confidence;
+  el('snapSignal').style.color = signal === 'CALL' ? 'var(--green)' : signal === 'PUT' ? 'var(--red)' : 'var(--text3)';
+
+  // Próxima vela M15
+  const now = getUTC3();
+  const secInCycle = (now.getUTCMinutes() % 15) * 60 + now.getUTCSeconds();
+  const secsLeft = 15 * 60 - secInCycle;
+  el('snapNextReg').textContent = autoRegisterEnabled
+    ? `${pad(Math.floor(secsLeft / 60))}:${pad(secsLeft % 60)} (${signal||'sem sinal'})`
+    : 'Auto desligado';
+  el('snapNextReg').style.color = autoRegisterEnabled ? 'var(--blue)' : 'var(--text3)';
+
+  // Ticker — atualiza EUR/USD com preço ao vivo
+  updateLiveTicker();
+}
+
+function el(id) {
+  return document.getElementById(id) || { textContent:'', style:{} };
+}
+
+function updateLiveTicker() {
+  const change = liveData.price - liveData.open;
+  const sign = change >= 0 ? '+' : '';
+  // Atualizar apenas o primeiro item do ticker
+  const items = document.querySelectorAll('.ticker-item');
+  if (items.length) {
+    const first = items[0];
+    const priceSpan = first.querySelector('.ticker-price');
+    if (priceSpan) priceSpan.textContent = liveData.price.toFixed(5);
+    const changeSpan = first.querySelectorAll('span')[2];
+    if (changeSpan) {
+      changeSpan.textContent = `${sign}${change.toFixed(5)}`;
+      changeSpan.style.color = change >= 0 ? '#00c896' : '#f0486a';
+    }
+  }
+}
+
+// Verifica se deve registrar uma nova vela M15
+async function checkAutoRegister() {
+  if (!autoRegisterEnabled) return;
+  const now = getUTC3();
+  if (!isMarketOpen(now)) return;
+
+  // Verifica se está no início de uma vela M15 (primeiros 3 segundos)
+  const secInCycle = (now.getUTCMinutes() % 15) * 60 + now.getUTCSeconds();
+  if (secInCycle > 3) return;
+
+  // Gera chave única para esta vela
+  const candleKey = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())} ${pad(now.getUTCHours())}:${pad(now.getUTCMinutes() - (now.getUTCMinutes()%15))}`;
+  if (lastAutoCandle === candleKey) return; // já registrou esta vela
+  lastAutoCandle = candleKey;
+
+  const { signal, confidence } = calcSignal();
+  if (!signal) {
+    logAuto('info', `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())} — Sem sinal claro (RSI: ${liveData.rsi})`);
+    return;
+  }
+
+  // Registra automaticamente com resultado pendente (WIN/LOSS será manual ou futuro)
+  // Por padrão, insere como "Aguardando resultado" — o usuário confirma depois
+  // Para auto-completo: registra Win Direto se sinal confirmado (simplificação)
+  const dateStr = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}`;
+  const timeStr = `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes() - (now.getUTCMinutes()%15))}`;
+
+  const entry = {
+    id: Date.now(),
+    date: dateStr,
+    time: timeStr,
+    direction: signal,
+    result: 'Win Direto',        // padrão: aguarda confirmação manual
+    obs: confidence,
+    marketOpen: true,
+    auto: true,
+    snapshot: {
+      price: liveData.price.toFixed(5),
+      rsi: liveData.rsi,
+      open: liveData.open.toFixed(5),
+      high: liveData.high.toFixed(5),
+      low:  liveData.low.toFixed(5),
+    }
+  };
+
+  const docId = await addEntryToFirebase(entry);
+  if (docId) entry._docId = docId;
+  state.history.unshift(entry);
+  saveHistory(state.history);
+  recalcStats();
+  updateStats();
+  renderHistoryList();
+  if (document.getElementById('page-historico').style.display === 'block') {
+    renderFullHistory();
+  }
+
+  // Atualiza contagem do dia
+  updateAutoCount();
+
+  // Log visual
+  logAuto(signal === 'CALL' ? 'call' : 'put',
+    `✔ ${timeStr} ${signal} registrado — ${confidence}`);
+
+  el('autoLastReg').textContent = timeStr;
+
+  showToast(
+    `🤖 Auto: ${signal}`,
+    `${timeStr} · RSI ${liveData.rsi} · ${confidence}`,
+    signal === 'CALL' ? '#00c896' : '#f0486a'
+  );
+}
+
+function logAuto(type, msg) {
+  const log = document.getElementById('autoLog');
+  if (!log) return;
+  const div = document.createElement('div');
+  div.className = `auto-log-entry ${type}`;
+  div.textContent = msg;
+  log.insertBefore(div, log.firstChild);
+  // Mantém máx 20 linhas
+  while (log.children.length > 20) log.removeChild(log.lastChild);
+}
+
+function updateAutoCount() {
+  const now = getUTC3();
+  const todayStr = `${now.getUTCFullYear()}-${pad(now.getUTCMonth()+1)}-${pad(now.getUTCDate())}`;
+  const count = state.history.filter(e => e.auto && e.date === todayStr).length;
+  el('autoCountToday').textContent = count;
+}
+
+function toggleAutoRegister(enabled) {
+  autoRegisterEnabled = enabled;
+  el('autoToggleLabel').textContent = enabled ? 'Ligado' : 'Desligado';
+  if (enabled) {
+    logAuto('call', '» Registro automático ATIVADO');
+    if (!isMarketOpen(getUTC3())) {
+      logAuto('info', '» Mercado fechado — aguardando abertura...');
+    }
+  } else {
+    logAuto('info', '» Registro automático DESATIVADO');
+  }
+}
+
+// Loop ao vivo: simula preço + verifica auto-registro
+function liveLoop() {
+  simulateLivePrice();
+  updateLiveUI();
+  checkAutoRegister();
+  updateAutoCount();
+}
+
+// ---------- Inicialização assíncrona ----------
+async function _appInit() {
+  state.history = await loadHistory();
+  initUI();
+  setInterval(liveLoop, 1000);
+  liveLoop();
+}
+
+window._appInit = _appInit;
+
+// Inicia assim que o DOM estiver pronto
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  _appInit();
+} else {
+  document.addEventListener('DOMContentLoaded', _appInit);
+}
+</script>
+</body>
+</html>
